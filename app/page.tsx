@@ -4,9 +4,9 @@ import { QrCode, ClipboardList, LogIn, Sparkles } from 'lucide-react'
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-between text-slate-100 font-sans">
-      {/* Top Header Identity */}
-      <header className="pt-8 text-center px-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-3">
+      {/* Header Identitas */}
+      <header className="pt-12 text-center px-4">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-4">
           <Sparkles className="w-3.5 h-3.5" /> Sistem Kehadiran Digital
         </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
@@ -17,7 +17,7 @@ export default function HomePage() {
         </p>
       </header>
 
-      {/* Main Action Cards */}
+      {/* Tombol Utama */}
       <main className="max-w-md w-full mx-auto px-4 py-8">
         <div className="bg-slate-800/80 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-700 space-y-4">
           <Link
@@ -52,7 +52,7 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Footer Identity */}
+      {/* Footer */}
       <footer className="pb-6 text-center text-xs text-slate-500">
         Generus Tamantirto 2026
       </footer>

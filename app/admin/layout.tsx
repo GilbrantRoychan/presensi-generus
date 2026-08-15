@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/login')
+    router.push('/')
     router.refresh()
   }
 
@@ -24,14 +24,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Header / Navbar Admin */}
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+      {/* Navbar Admin */}
       <header className="bg-slate-900 text-white shadow-md sticky top-0 z-50 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             
-            {/* Branding Judul */}
-            <div className="flex items-center gap-3">
+            {/* Branding */}
+            <Link href="/" className="flex items-center gap-3">
               <div className="p-2 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30">
                 <ShieldCheck className="w-6 h-6" />
               </div>
@@ -39,7 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <h1 className="font-bold text-lg tracking-wide text-slate-100">GENERUS TAMANTIRTO</h1>
                 <p className="text-[10px] text-slate-400 -mt-1 tracking-wider uppercase font-semibold">Panel Admin Presensi</p>
               </div>
-            </div>
+            </Link>
 
             {/* Navigation Links */}
             <nav className="hidden md:flex items-center gap-1">
@@ -72,32 +72,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
-
-          {/* Mobile Navigation Links */}
-          <div className="md:hidden flex overflow-x-auto pb-3 gap-1 pt-1 border-t border-slate-800 scrollbar-none">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs whitespace-nowrap font-medium transition ${
-                    isActive
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-300 bg-slate-800/60'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
+      {/* Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         {children}
       </main>
