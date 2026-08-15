@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Html5QrcodeScanner } from 'html5-qrcode'
 import { Camera, UserCheck, UserPlus, Calendar } from 'lucide-react'
@@ -15,9 +15,9 @@ export default function AdminScanPage() {
   
   // State Form Generus Baru
   const [namaBaru, setNamaBaru] = useState('')
-  const [kelompokBaru, setKelompokBaru] = useState('')
+  const [kelompokBaru, setKelompokBaru] = useState('Gonjen 1')
   const [jkBaru, setJkBaru] = useState<'Laki-laki' | 'Perempuan'>('Laki-laki')
-  const [kelasBaru, setKelasBaru] = useState('')
+  const [kelasBaru, setKelasBaru] = useState('Pra Remaja')
 
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
@@ -53,7 +53,6 @@ export default function AdminScanPage() {
   }
 
   const fetchGenerus = async () => {
-    // Pengurutan Hirarki: Kelompok -> Nama -> Jenis Kelamin -> Kelas
     const { data } = await supabase.from('generus').select('*')
       .order('kelompok', { ascending: true })
       .order('nama', { ascending: true })
@@ -111,7 +110,8 @@ export default function AdminScanPage() {
       nama: namaBaru,
       kelompok: kelompokBaru,
       jenis_kelamin: jkBaru,
-      kelas: kelasBaru
+      kelas: kelasBaru,
+      qr_code_id: `GEN-${Math.floor(1000 + Math.random() * 9000)}`
     }).select().single()
 
     if (error || !newGen) {
@@ -124,8 +124,9 @@ export default function AdminScanPage() {
     
     // Reset Form
     setNamaBaru('')
-    setKelompokBaru('')
-    setKelasBaru('')
+    setKelompokBaru('Gonjen 1')
+    setJkBaru('Laki-laki')
+    setKelasBaru('Pra Remaja')
   }
 
   return (
@@ -139,7 +140,7 @@ export default function AdminScanPage() {
         <select
           value={selectedAcara}
           onChange={(e) => setSelectedAcara(e.target.value)}
-          className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium"
+          className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium text-sm sm:text-base outline-none"
         >
           <option value="">-- Pilih Acara Aktif --</option>
           {acaraList.map((a) => (
@@ -151,7 +152,7 @@ export default function AdminScanPage() {
       </div>
 
       {message && (
-        <div className={`p-4 rounded-lg text-white font-medium ${message.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+        <div className={`p-4 rounded-lg text-white font-medium text-sm ${message.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {message.text}
         </div>
       )}
@@ -165,7 +166,7 @@ export default function AdminScanPage() {
             Kolom A: Pemindai Kamera QR Code
           </h2>
           {!selectedAcara ? (
-            <div className="h-64 flex items-center justify-center text-gray-400 text-center">
+            <div className="h-64 flex items-center justify-center text-gray-400 text-center text-sm">
               Pilih acara di atas untuk mengaktifkan scanner kamera.
             </div>
           ) : (
@@ -178,7 +179,7 @@ export default function AdminScanPage() {
           <h2 className="text-lg font-bold text-gray-800 mb-4">Kolom B: Presensi Manual</h2>
           
           {/* Tab Switcher Toggle */}
-          <div className="flex border-b mb-6">
+          <div className="flex border-b mb-6 text-sm">
             <button
               onClick={() => setActiveTab('ada')}
               className={`flex-1 py-2 font-medium flex items-center justify-center gap-2 border-b-2 ${
@@ -201,11 +202,11 @@ export default function AdminScanPage() {
           {activeTab === 'ada' && (
             <form onSubmit={handleManualAdaSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Cari Nama Generus</label>
+                <label className="block text-sm font-medium mb-1 text-slate-700">Cari Nama Generus</label>
                 <select
                   value={selectedGenerusId}
                   onChange={(e) => setSelectedGenerusId(e.target.value)}
-                  className="w-full p-2.5 border rounded-lg"
+                  className="w-full p-2.5 border rounded-lg text-xs sm:text-sm bg-white outline-none"
                   disabled={!selectedAcara}
                 >
                   <option value="">-- Pilih Generus --</option>
@@ -219,7 +220,7 @@ export default function AdminScanPage() {
               <button
                 type="submit"
                 disabled={!selectedAcara || !selectedGenerusId}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300"
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 text-xs sm:text-sm transition"
               >
                 Submit Presensi
               </button>
@@ -228,43 +229,62 @@ export default function AdminScanPage() {
 
           {/* Tab 2: + Generus Baru */}
           {activeTab === 'baru' && (
-            <form onSubmit={handleManualBaruSubmit} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Nama Lengkap"
-                value={namaBaru}
-                onChange={(e) => setNamaBaru(e.target.value)}
-                required
-                className="w-full p-2 border rounded-lg text-sm"
-              />
-              <input
-                type="text"
-                placeholder="Kelompok"
-                value={kelompokBaru}
-                onChange={(e) => setKelompokBaru(e.target.value)}
-                required
-                className="w-full p-2 border rounded-lg text-sm"
-              />
-              <select
-                value={jkBaru}
-                onChange={(e) => setJkBaru(e.target.value as any)}
-                className="w-full p-2 border rounded-lg text-sm"
-              >
-                <option value="Laki-laki">Laki-laki</option>
-                <option value="Perempuan">Perempuan</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Kelas / Tingkat"
-                value={kelasBaru}
-                onChange={(e) => setKelasBaru(e.target.value)}
-                required
-                className="w-full p-2 border rounded-lg text-sm"
-              />
+            <form onSubmit={handleManualBaruSubmit} className="space-y-3 text-xs sm:text-sm">
+              <div>
+                <input
+                  type="text"
+                  placeholder="Nama Lengkap"
+                  value={namaBaru}
+                  onChange={(e) => setNamaBaru(e.target.value)}
+                  required
+                  className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Dropdown Kelompok */}
+              <div>
+                <select
+                  value={kelompokBaru}
+                  onChange={(e) => setKelompokBaru(e.target.value)}
+                  className="w-full p-2.5 border rounded-lg outline-none bg-white text-slate-700"
+                >
+                  <option value="Gonjen 1">Gonjen 1</option>
+                  <option value="Gonjen 2">Gonjen 2</option>
+                  <option value="Kembaran">Kembaran</option>
+                  <option value="Sembung">Sembung</option>
+                </select>
+              </div>
+
+              {/* Dropdown Jenis Kelamin */}
+              <div>
+                <select
+                  value={jkBaru}
+                  onChange={(e) => setJkBaru(e.target.value as any)}
+                  className="w-full p-2.5 border rounded-lg outline-none bg-white text-slate-700"
+                >
+                  <option value="Laki-laki">Laki-laki</option>
+                  <option value="Perempuan">Perempuan</option>
+                </select>
+              </div>
+
+              {/* Dropdown Kelas / Tingkat */}
+              <div>
+                <select
+                  value={kelasBaru}
+                  onChange={(e) => setKelasBaru(e.target.value)}
+                  className="w-full p-2.5 border rounded-lg outline-none bg-white text-slate-700"
+                >
+                  <option value="Pra Remaja">Pra Remaja</option>
+                  <option value="Remaja">Remaja</option>
+                  <option value="Pra Nikah">Pra Nikah</option>
+                  <option value="Mandiri">Mandiri</option>
+                </select>
+              </div>
+
               <button
                 type="submit"
                 disabled={!selectedAcara}
-                className="w-full py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300"
+                className="w-full py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 transition mt-2"
               >
                 Simpan & Catat Presensi
               </button>
