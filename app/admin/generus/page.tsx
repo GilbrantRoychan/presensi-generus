@@ -222,7 +222,7 @@ export default function AdminGenerusPage() {
     setEditingData(null)
   }
 
-  // Filtering Data
+  // 1. Filtering Data berdasarkan Kelompok dan Pencarian
   const kelompokList = Array.from(new Set(generusList.map(g => g.kelompok).filter(Boolean)))
   
   const filteredGenerus = generusList.filter(g => {
@@ -232,10 +232,10 @@ export default function AdminGenerusPage() {
     return matchKelompok && matchSearch
   })
 
-  // Ringkasan Statistik
-  const totalGenerus = generusList.length
-  const totalLaki = generusList.filter(g => g.jenis_kelamin?.toLowerCase().includes('laki')).length
-  const totalPerempuan = generusList.filter(g => g.jenis_kelamin?.toLowerCase().includes('perempuan')).length
+  // 2. Ringkasan Statistik Dinamis (Mengikuti Data yang Difilter)
+  const totalGenerus = filteredGenerus.length
+  const totalLaki = filteredGenerus.filter(g => g.jenis_kelamin?.toLowerCase().includes('laki')).length
+  const totalPerempuan = filteredGenerus.filter(g => g.jenis_kelamin?.toLowerCase().includes('perempuan')).length
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
@@ -277,11 +277,13 @@ export default function AdminGenerusPage() {
           </div>
         </div>
 
-        {/* Ringkasan Metrics */}
+        {/* Ringkasan Metrics Dinamis */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Generus</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Total Generus {selectedKelompok !== 'Semua Kelompok' && `(${selectedKelompok})`}
+              </p>
               <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalGenerus}</p>
             </div>
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
