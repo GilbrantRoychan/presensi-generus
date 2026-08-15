@@ -13,7 +13,7 @@ export default function GenerusAdminPage() {
   // Form Tambah Generus Manual
   const [nama, setNama] = useState('')
   const [jenisKelamin, setJenisKelamin] = useState('Laki-laki')
-  const [kelompok, setKelompok] = useState('Sembung')
+  const [kelompok, setKelompok] = useState('Gonjen 1')
   const [kelas, setKelas] = useState('Pra Remaja')
   const [qrCodeId, setQrCodeId] = useState('')
 
@@ -30,20 +30,20 @@ export default function GenerusAdminPage() {
     setLoading(false)
   }
 
-  // 1. Download Template Excel
+  // Download Template Excel
   const handleDownloadTemplate = () => {
     const templateData = [
       {
         nama: 'Ahmad Fulan',
         jenis_kelamin: 'Laki-laki',
-        kelompok: 'Sembung',
+        kelompok: 'Gonjen 1',
         kelas: 'Pra Remaja',
         qr_code_id: 'GEN-001',
       },
       {
         nama: 'Fatimah Az-Zahra',
         jenis_kelamin: 'Perempuan',
-        kelompok: 'Tamantirto',
+        kelompok: 'Sembung',
         kelas: 'Remaja',
         qr_code_id: 'GEN-002',
       },
@@ -55,7 +55,7 @@ export default function GenerusAdminPage() {
     XLSX.writeFile(workbook, 'Template_Import_Generus_Tamantirto.xlsx')
   }
 
-  // 2. Import Data Excel
+  // Import Data Excel
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -82,7 +82,7 @@ export default function GenerusAdminPage() {
           return {
             nama: item.nama || item.Nama,
             jenis_kelamin: jk,
-            kelompok: item.kelompok || item.Kelompok || 'Sembung',
+            kelompok: item.kelompok || item.Kelompok || 'Gonjen 1',
             kelas: item.kelas || item.Kelas || 'Pra Remaja',
             qr_code_id: item.qr_code_id || item.QR_Code_ID || `GEN-${Math.floor(1000 + Math.random() * 9000)}`,
           }
@@ -103,7 +103,7 @@ export default function GenerusAdminPage() {
     reader.readAsBinaryString(file)
   }
 
-  // 3. Submit Manual
+  // Submit Manual
   const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nama) return alert('Nama Generus wajib diisi!')
@@ -125,7 +125,7 @@ export default function GenerusAdminPage() {
     }
   }
 
-  // 4. Hapus Data
+  // Hapus Data
   const handleDelete = async (id: string) => {
     if (confirm('Yakin ingin menghapus data generus ini?')) {
       const { error } = await supabase.from('generus').delete().eq('id', id)
@@ -202,13 +202,16 @@ export default function GenerusAdminPage() {
 
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Kelompok</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Gonjen"
+                <select
                   value={kelompok}
                   onChange={(e) => setKelompok(e.target.value)}
-                  className="w-full p-2 border rounded-lg outline-none"
-                />
+                  className="w-full p-2 border rounded-lg outline-none bg-white"
+                >
+                  <option value="Gonjen 1">Gonjen 1</option>
+                  <option value="Gonjen 2">Gonjen 2</option>
+                  <option value="Kembaran">Kembaran</option>
+                  <option value="Sembung">Sembung</option>
+                </select>
               </div>
             </div>
 
@@ -220,11 +223,10 @@ export default function GenerusAdminPage() {
                   onChange={(e) => setKelas(e.target.value)}
                   className="w-full p-2 border rounded-lg outline-none bg-white"
                 >
-                  <option value="Caberawit PAUD">Caberawit PAUD</option>
-                  <option value="Caberawit SD">Caberawit SD</option>
                   <option value="Pra Remaja">Pra Remaja</option>
                   <option value="Remaja">Remaja</option>
-                  <option value="Usia Nikah">Usia Nikah</option>
+                  <option value="Pra Nikah">Pra Nikah</option>
+                  <option value="Mandiri">Mandiri</option>
                 </select>
               </div>
 
