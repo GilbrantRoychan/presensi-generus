@@ -10,10 +10,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const supabase = createClient()
 
-  // PERBAIKAN: Mengarahkan redirect logout ke halaman utama/dashboard ("/")
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.push('/')
+    router.push('/login')
     router.refresh()
   }
 
@@ -32,7 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center justify-between h-16">
             
             {/* Branding Judul */}
-            <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition">
+            <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30">
                 <ShieldCheck className="w-6 h-6" />
               </div>
@@ -40,7 +39,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <h1 className="font-bold text-lg tracking-wide text-slate-100">GENERUS TAMANTIRTO</h1>
                 <p className="text-[10px] text-slate-400 -mt-1 tracking-wider uppercase font-semibold">Panel Admin Presensi</p>
               </div>
-            </Link>
+            </div>
 
             {/* Navigation Links */}
             <nav className="hidden md:flex items-center gap-1">
