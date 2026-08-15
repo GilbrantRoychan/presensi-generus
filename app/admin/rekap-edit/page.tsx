@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Calendar, Search, Save, Filter, Users, CheckCircle, Clock, XCircle, Percent } from 'lucide-react'
+import { Search, Save, Download, Printer } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 export default function RekapEditPage() {
   const supabase = createClient()
@@ -134,7 +135,6 @@ export default function RekapEditPage() {
     setSavingId(null)
   }
 
-  // Filter Data berdasarkan Kelompok, JK, dan Pencarian
   const filteredGenerus = generusList.filter((g) => {
     const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
     const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
@@ -159,13 +159,83 @@ export default function RekapEditPage() {
 
   const persentaseHadir = totalGenerus > 0 ? ((totalHadir / totalGenerus) * 100).toFixed(1) : '0'
 
+  // Fitur Export ke Excel
+  const handleExportExcel = () => {
+    if (!selectedAcara) return alert('Pilih acara terlebih dahulu!')
+
+    const currentAcaraInfo = acaraList.find((a) => a.id === selectedAcara)
+    const namaAcaraStr = currentAcaraInfo ? `${currentAcaraInfo.nama_acara} (${currentAcaraInfo.tanggal})` : 'Acara'
+
+    const exportData = filteredGenerus.map((g, index) => {
+      const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '' }
+      return {
+        'No': index + 1,
+        'Nama Lengkap': g.nama,
+        'Jenis Kelamin': g.jenis_kelamin,
+        'Kelompok': g.kelompok,
+        'Kelas / Tingkat': g.kelas,
+        'Status Presensi': pData.status,
+        'Alasan / Keterangan': pData.alasan || '-'
+      }
+    })
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Presensi')
+
+    // Set auto column width
+    const max_width = exportData.reduce((w, r) => Math.max(w, r['Nama Lengkap'].length), 10)
+    worksheet['!cols'] = [
+      { wch: 5 },  // No
+      { wch: max_width + 5 }, // Nama
+      { wch: 15 }, // JK
+      { wch: 15 }, // Kelompok
+      { wch: 15 }, // Kelas
+      { wch: 22 }, // Status
+      { wch: 25 }  // Alasan
+    ]
+
+    XLSX.writeFile(workbook, `Rekap_Presensi_Edit_${namaAcaraStr.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`)
+  }
+
+  // Fitur Print PDF
+  const handlePrint = () => {
+    if (!selectedAcara) return alert('Pilih acara terlebih dahulu!')
+    window.print()
+  }
+
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-        <h1 className="text-xl font-bold text-gray-800">Rekap Presensi & Control Status</h1>
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 print:shadow-none print:border-none print:p-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Rekap Presensi & Control Status</h1>
+            <p className="text-sm text-gray-500">
+              Kelola status presensi generus dan unduh rekap data.
+            </p>
+          </div>
+
+          {/* Tombol Export & Print */}
+          {selectedAcara && (
+            <div className="flex items-center gap-2 print:hidden">
+              <button
+                onClick={handleExportExcel}
+                className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Download className="w-4 h-4" /> Export Excel
+              </button>
+              <button
+                onClick={handlePrint}
+                className="px-3.5 py-2 bg-gray-800 text-white rounded-lg text-xs font-semibold hover:bg-gray-900 transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Printer className="w-4 h-4" /> Cetak / PDF
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Dropdown Acara, Filter Kelompok & Jenis Kelamin */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 print:hidden">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
             <select
@@ -239,7 +309,7 @@ export default function RekapEditPage() {
       )}
 
       {/* Box Search */}
-      <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative">
+      <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative print:hidden">
         <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400" />
         <input
           type="text"
@@ -251,13 +321,13 @@ export default function RekapEditPage() {
       </div>
 
       {/* Tabel Data Rekap */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
         {!selectedAcara ? (
-          <div className="p-8 text-center text-gray-400 text-sm">
+          <div className="p-8 text-center text-gray-400 text-sm print:hidden">
             Silakan pilih acara terlebih dahulu untuk menampilkan daftar rekap presensi.
           </div>
         ) : loading ? (
-          <div className="p-8 text-center text-gray-500 text-sm">Memuat data rekap...</div>
+          <div className="p-8 text-center text-gray-500 text-sm print:hidden">Memuat data rekap...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -267,7 +337,7 @@ export default function RekapEditPage() {
                   <th className="p-4">Kelompok / Kelas</th>
                   <th className="p-4">Status Kehadiran</th>
                   <th className="p-4">Alasan (Izin / Sakit)</th>
-                  <th className="p-4 text-center">Aksi</th>
+                  <th className="p-4 text-center print:hidden">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -314,7 +384,7 @@ export default function RekapEditPage() {
                           <span className="text-gray-300 text-xs">-</span>
                         )}
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-4 text-center print:hidden">
                         <button
                           onClick={() => handleSave(g.id)}
                           disabled={savingId === g.id}
