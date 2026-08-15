@@ -2,187 +2,266 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import * as XLSX from 'xlsx'
-import { Download, Printer, Filter, Eye } from 'lucide-react'
+import { Calendar, Search, Users, CheckCircle2, Clock, XCircle, Percent, Filter } from 'lucide-react'
 
 export default function RekapPage() {
   const supabase = createClient()
   const [acaraList, setAcaraList] = useState<any[]>([])
   const [selectedAcara, setSelectedAcara] = useState<string>('')
-  const [rekapData, setRekapData] = useState<any[]>([])
+  const [generusList, setGenerusList] = useState<any[]>([])
+  const [presensiMap, setPresensiMap] = useState<{ [key: string]: { status: string; alasan: string; metode: string } }>({})
   
-  // Custom Toggle Kolom
-  const [showColumns, setShowColumns] = useState({
-    kelompok: true,
-    nama: true,
-    jk: true,
-    kelas: true,
-    status: true,
-    waktu: true,
-    metode: true,
-  })
+  // Filter Dropdown State
+  const [selectedKelompok, setSelectedKelompok] = useState<string>('Semua')
+  const [selectedJK, setSelectedJK] = useState<string>('Semua')
+  const [searchQuery, setSearchQuery] = useState('')
+  
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     fetchAcara()
   }, [])
 
   useEffect(() => {
-    if (selectedAcara) fetchRekap()
+    if (selectedAcara) {
+      fetchRekapData()
+    }
   }, [selectedAcara])
 
   const fetchAcara = async () => {
     const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
-    if (data) {
-      setAcaraList(data)
-      if (data.length > 0) setSelectedAcara(data[0].id)
-    }
+    if (data) setAcaraList(data)
   }
 
-  const fetchRekap = async () => {
-    // Pengurutan Hirarki Konsisten: Kelompok -> Nama -> Jenis Kelamin -> Kelas
-    const { data } = await supabase
+  const fetchRekapData = async () => {
+    setLoading(true)
+    // Fetch Seluruh Generus
+    const { data: generusData } = await supabase
       .from('generus')
-      .select(`
-        id, nama, kelompok, jenis_kelamin, kelas,
-        presensi!left(status, waktu_scanned, metode, acara_id)
-      `)
+      .select('*')
       .order('kelompok', { ascending: true })
       .order('nama', { ascending: true })
-      .order('jenis_kelamin', { ascending: true })
-      .order('kelas', { ascending: true })
 
-    if (data) {
-      const formatted = data.map((g) => {
-        const p = Array.isArray(g.presensi) 
-          ? g.presensi.find((item: any) => item.acara_id === selectedAcara)
-          : null
+    // Fetch Presensi berdasarkan Acara
+    const { data: presensiData } = await supabase
+      .from('presensi')
+      .select('*')
+      .eq('acara_id', selectedAcara)
 
-        return {
-          kelompok: g.kelompok,
-          nama: g.nama,
-          jk: g.jenis_kelamin,
-          kelas: g.kelas,
-          status: p ? p.status : 'Alpa',
-          waktu: p?.waktu_scanned ? new Date(p.waktu_scanned).toLocaleTimeString('id-ID') : '-',
-          metode: p?.metode || '-',
-        }
+    if (generusData) {
+      setGenerusList(generusData)
+
+      const pMap: { [key: string]: { status: string; alasan: string; metode: string } } = {}
+      
+      // Default Status untuk Generus yang belum presensi
+      generusData.forEach((g) => {
+        pMap[g.id] = { status: 'Alpa / Belum Presensi', alasan: '-', metode: '-' }
       })
-      setRekapData(formatted)
+
+      if (presensiData) {
+        presensiData.forEach((p) => {
+          let currentStatus = p.status
+          if (currentStatus === 'sakit' || currentStatus === 'Sakit' || currentStatus === 'izin' || currentStatus === 'Izin') {
+            currentStatus = 'Izin'
+          } else if (currentStatus === 'hadir' || currentStatus === 'Hadir') {
+            currentStatus = 'Hadir'
+          } else {
+            currentStatus = 'Alpa / Belum Presensi'
+          }
+
+          pMap[p.generus_id] = {
+            status: currentStatus,
+            alasan: p.alasan || '-',
+            metode: p.metode || 'Manual'
+          }
+        })
+      }
+      setPresensiMap(pMap)
     }
+    setLoading(false)
   }
 
-  const exportToExcel = () => {
-    const activeAcara = acaraList.find(a => a.id === selectedAcara)
-    const worksheet = XLSX.utils.json_to_sheet(rekapData)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Presensi")
-    XLSX.writeFile(workbook, `Rekap_Presensi_${activeAcara?.nama_acara || 'Acara'}.xlsx`)
-  }
+  // Filter Data berdasarkan Kelompok, Jenis Kelamin, dan Keyword Pencarian
+  const filteredGenerus = generusList.filter((g) => {
+    const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
+    const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
+    const matchSearch =
+      g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchKelompok && matchJK && matchSearch
+  })
+
+  // Hitung Statistik Presensi Berdasarkan Hasil Filter
+  const totalGenerus = filteredGenerus.length
+  let totalHadir = 0
+  let totalIzin = 0
+  let totalAlpa = 0
+
+  filteredGenerus.forEach((g) => {
+    const st = presensiMap[g.id]?.status
+    if (st === 'Hadir') totalHadir++
+    else if (st === 'Izin') totalIzin++
+    else totalAlpa++
+  })
+
+  const persentaseHadir = totalGenerus > 0 ? ((totalHadir / totalGenerus) * 100).toFixed(1) : '0'
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl shadow-sm border">
+    <div className="max-w-6xl mx-auto p-4 space-y-6">
+      {/* Header Info & Filter Acara / Kelompok / JK */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Rekapitulasi Kehadiran</h1>
-          <p className="text-sm text-gray-500">Portal Publik Viewer Presensi Generus</p>
+          <h1 className="text-xl font-bold text-gray-800">Rekap Presensi Viewer</h1>
+          <p className="text-sm text-gray-500">
+            Laporan ringkasan dan persentase kehadiran generus per acara.
+          </p>
         </div>
-        
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
-          >
-            <Download className="w-4 h-4" /> Export Excel
-          </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium"
-          >
-            <Printer className="w-4 h-4" /> Cetak / PDF
-          </button>
+
+        {/* Dropdown Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
+            <select
+              value={selectedAcara}
+              onChange={(e) => setSelectedAcara(e.target.value)}
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            >
+              <option value="">-- Pilih Acara --</option>
+              {acaraList.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nama_acara} - {a.tanggal}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Filter Kelompok</label>
+            <select
+              value={selectedKelompok}
+              onChange={(e) => setSelectedKelompok(e.target.value)}
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Semua">Semua Kelompok</option>
+              <option value="Gonjen 1">Gonjen 1</option>
+              <option value="Gonjen 2">Gonjen 2</option>
+              <option value="Kembaran">Kembaran</option>
+              <option value="Sembung">Sembung</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Filter Jenis Kelamin</label>
+            <select
+              value={selectedJK}
+              onChange={(e) => setSelectedJK(e.target.value)}
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Semua">Semua Jenis Kelamin</option>
+              <option value="Laki-laki">Laki-laki</option>
+              <option value="Perempuan">Perempuan</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Filter Acara & Toggle Kolom */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
-        <div className="flex items-center gap-3">
-          <Filter className="w-5 h-5 text-blue-600" />
-          <select
-            value={selectedAcara}
-            onChange={(e) => setSelectedAcara(e.target.value)}
-            className="w-full md:w-1/3 p-2.5 border rounded-lg bg-gray-50 font-medium"
-          >
-            {acaraList.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nama_acara} ({a.tanggal})
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Kartu Statistik Rekap Kehadiran */}
+      {selectedAcara && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+            <p className="text-xs text-gray-500 font-medium">Total Generus</p>
+            <p className="text-xl font-bold text-gray-800">{totalGenerus}</p>
+          </div>
 
-        {/* Toggle Kolom */}
-        <div className="flex flex-wrap items-center gap-4 pt-3 border-t text-sm">
-          <span className="font-semibold flex items-center gap-1 text-gray-600">
-            <Eye className="w-4 h-4" /> Tampilkan Kolom:
-          </span>
-          {Object.keys(showColumns).map((col) => (
-            <label key={col} className="flex items-center gap-1.5 cursor-pointer capitalize text-gray-700">
-              <input
-                type="checkbox"
-                checked={(showColumns as any)[col]}
-                onChange={(e) => setShowColumns({ ...showColumns, [col]: e.target.checked })}
-                className="rounded text-blue-600"
-              />
-              {col === 'jk' ? 'Jenis Kelamin' : col}
-            </label>
-          ))}
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+            <p className="text-xs text-gray-500 font-medium">Hadir</p>
+            <p className="text-xl font-bold text-green-600">{totalHadir}</p>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+            <p className="text-xs text-gray-500 font-medium">Izin</p>
+            <p className="text-xl font-bold text-amber-600">{totalIzin}</p>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
+            <p className="text-xs text-gray-500 font-medium">Alpa</p>
+            <p className="text-xl font-bold text-gray-400">{totalAlpa}</p>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 col-span-2 sm:col-span-1 flex flex-col justify-center">
+            <p className="text-xs text-gray-500 font-medium">Kehadiran</p>
+            <p className="text-xl font-bold text-blue-600">{persentaseHadir}%</p>
+          </div>
         </div>
+      )}
+
+      {/* Input Pencarian */}
+      <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative">
+        <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Cari nama, kelas, atau kelompok..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-3 py-2 border rounded-lg text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
 
-      {/* Tabel Data Rekap */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-100 border-b">
-            <tr>
-              <th className="p-3">No</th>
-              {showColumns.kelompok && <th className="p-3">Kelompok</th>}
-              {showColumns.nama && <th className="p-3">Nama</th>}
-              {showColumns.jk && <th className="p-3">Jenis Kelamin</th>}
-              {showColumns.kelas && <th className="p-3">Kelas</th>}
-              {showColumns.status && <th className="p-3">Status</th>}
-              {showColumns.waktu && <th className="p-3">Waktu</th>}
-              {showColumns.metode && <th className="p-3">Metode</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {rekapData.map((row, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="p-3 text-gray-500">{idx + 1}</td>
-                {showColumns.kelompok && <td className="p-3 font-medium">{row.kelompok}</td>}
-                {showColumns.nama && <td className="p-3 font-semibold">{row.nama}</td>}
-                {showColumns.jk && <td className="p-3">{row.jk}</td>}
-                {showColumns.kelas && <td className="p-3">{row.kelas}</td>}
-                {showColumns.status && (
-                  <td className="p-3">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        row.status === 'Hadir'
-                          ? 'bg-green-100 text-green-700'
-                          : row.status === 'Izin'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {row.status}
-                    </span>
-                  </td>
-                )}
-                {showColumns.waktu && <td className="p-3 text-gray-500">{row.waktu}</td>}
-                {showColumns.metode && <td className="p-3 text-gray-500">{row.metode}</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Tabel Data Rekap Viewer */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {!selectedAcara ? (
+          <div className="p-8 text-center text-gray-400 text-sm">
+            Silakan pilih acara terlebih dahulu untuk melihat rekap kehadiran.
+          </div>
+        ) : loading ? (
+          <div className="p-8 text-center text-gray-500 text-sm">Memuat data rekap...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500 font-semibold">
+                <tr>
+                  <th className="p-4">Nama Generus</th>
+                  <th className="p-4">Kelompok</th>
+                  <th className="p-4">Kelas</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Alasan / Keterangan</th>
+                  <th className="p-4 text-center">Metode</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredGenerus.map((g) => {
+                  const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-', metode: '-' }
+
+                  return (
+                    <tr key={g.id} className="hover:bg-gray-50/50 transition">
+                      <td className="p-4">
+                        <div className="font-semibold text-gray-800">{g.nama}</div>
+                        <div className="text-xs text-gray-400">{g.jenis_kelamin}</div>
+                      </td>
+                      <td className="p-4 text-gray-600">{g.kelompok}</td>
+                      <td className="p-4 text-gray-600">{g.kelas}</td>
+                      <td className="p-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            pData.status === 'Hadir'
+                              ? 'bg-green-100 text-green-700'
+                              : pData.status === 'Izin'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {pData.status}
+                        </span>
+                      </td>
+                      <td className="p-4 text-gray-600 text-xs">{pData.alasan}</td>
+                      <td className="p-4 text-center text-xs text-gray-400 font-mono">{pData.metode}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
