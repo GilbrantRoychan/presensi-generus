@@ -1,12 +1,12 @@
-import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Generus Tamantirto',
-  description: 'Sistem Kehadiran & Rekapitulasi Digital',
+  title: 'Presensi Generus',
+  description: 'Sistem Pengelolaan Kehadiran & Data Generus',
 }
 
 export default function RootLayout({
@@ -15,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id">
-      <body className={`${inter.className} bg-slate-900 text-slate-100 antialiased`}>
+    <html lang="id" className="h-full bg-slate-50">
+      <body className={`${inter.className} h-full antialiased text-slate-900 bg-slate-50 selection:bg-blue-100 selection:text-blue-700`}>
         {children}
       </body>
     </html>
