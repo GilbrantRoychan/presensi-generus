@@ -119,7 +119,7 @@ export default function AdminGenerusPage() {
                 onChange={(e) => setKelas(e.target.value)}
                 required
                 className="w-full p-2.5 border rounded-lg text-sm"
-                placeholder="Contoh: Remaja / SMA"
+                placeholder="Contoh: Remaja"
               />
             </div>
             <button
