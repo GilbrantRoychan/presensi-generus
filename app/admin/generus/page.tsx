@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import * as XLSX from 'xlsx'
-import { Plus, Download, Upload, Trash2, Search, FileSpreadsheet } from 'lucide-react'
+import { Plus, Upload, Trash2, Search, FileSpreadsheet } from 'lucide-react'
 
 export default function GenerusAdminPage() {
   const [generusList, setGenerusList] = useState<any[]>([])
@@ -12,7 +12,7 @@ export default function GenerusAdminPage() {
   
   // Form Tambah Generus Manual
   const [nama, setNama] = useState('')
-  const [jenisKelamin, setJenisKelamin] = useState('L')
+  const [jenisKelamin, setJenisKelamin] = useState('Laki-laki')
   const [kelompok, setKelompok] = useState('Sembung')
   const [kelas, setKelas] = useState('Pra Remaja')
   const [qrCodeId, setQrCodeId] = useState('')
@@ -30,19 +30,19 @@ export default function GenerusAdminPage() {
     setLoading(false)
   }
 
-  // 1. Fungsi Download Template Excel
+  // 1. Download Template Excel
   const handleDownloadTemplate = () => {
     const templateData = [
       {
         nama: 'Ahmad Fulan',
-        jenis_kelamin: 'L',
+        jenis_kelamin: 'Laki-laki',
         kelompok: 'Sembung',
         kelas: 'Pra Remaja',
         qr_code_id: 'GEN-001',
       },
       {
         nama: 'Fatimah Az-Zahra',
-        jenis_kelamin: 'P',
+        jenis_kelamin: 'Perempuan',
         kelompok: 'Tamantirto',
         kelas: 'Remaja',
         qr_code_id: 'GEN-002',
@@ -55,7 +55,7 @@ export default function GenerusAdminPage() {
     XLSX.writeFile(workbook, 'Template_Import_Generus_Tamantirto.xlsx')
   }
 
-  // 2. Fungsi Import Data dari Excel / CSV
+  // 2. Import Data Excel
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -74,14 +74,19 @@ export default function GenerusAdminPage() {
           return
         }
 
-        // Validasi dan format data untuk insert Supabase
-        const formattedData = data.map((item) => ({
-          nama: item.nama || item.Nama,
-          jenis_kelamin: (item.jenis_kelamin || item.Jenis_Kelamin || 'L').toUpperCase(),
-          kelompok: item.kelompok || item.Kelompok || 'Sembung',
-          kelas: item.kelas || item.Kelas || 'Pra Remaja',
-          qr_code_id: item.qr_code_id || item.QR_Code_ID || `GEN-${Math.floor(1000 + Math.random() * 9000)}`,
-        }))
+        const formattedData = data.map((item) => {
+          let jk = item.jenis_kelamin || item.Jenis_Kelamin || 'Laki-laki'
+          if (jk === 'L' || jk === 'l') jk = 'Laki-laki'
+          if (jk === 'P' || jk === 'p') jk = 'Perempuan'
+
+          return {
+            nama: item.nama || item.Nama,
+            jenis_kelamin: jk,
+            kelompok: item.kelompok || item.Kelompok || 'Sembung',
+            kelas: item.kelas || item.Kelas || 'Pra Remaja',
+            qr_code_id: item.qr_code_id || item.QR_Code_ID || `GEN-${Math.floor(1000 + Math.random() * 9000)}`,
+          }
+        })
 
         const { error } = await supabase.from('generus').insert(formattedData)
 
@@ -98,7 +103,7 @@ export default function GenerusAdminPage() {
     reader.readAsBinaryString(file)
   }
 
-  // 3. Fungsi Submit Manual 1 Data
+  // 3. Submit Manual
   const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nama) return alert('Nama Generus wajib diisi!')
@@ -137,7 +142,7 @@ export default function GenerusAdminPage() {
 
   return (
     <div className="space-y-6">
-      {/* Action Bar: Import & Download Template */}
+      {/* Header & Import */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Data Generus</h2>
@@ -145,7 +150,6 @@ export default function GenerusAdminPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Tombol Download Template */}
           <button
             onClick={handleDownloadTemplate}
             className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition border border-slate-300"
@@ -153,7 +157,6 @@ export default function GenerusAdminPage() {
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Download Template Excel
           </button>
 
-          {/* Tombol Import File */}
           <label className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition shadow-sm">
             <Upload className="w-4 h-4" /> Import Excel / CSV
             <input
@@ -167,7 +170,7 @@ export default function GenerusAdminPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Input Manual 1 Data */}
+        {/* Form Input Manual */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-fit">
           <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Plus className="w-4 h-4 text-blue-600" /> Tambah Manual
@@ -177,7 +180,7 @@ export default function GenerusAdminPage() {
               <label className="block font-medium text-slate-700 mb-1">Nama Generus</label>
               <input
                 type="text"
-                placeholder="Contoh: Ahmad Fulan"
+                placeholder="Contoh: Nina"
                 value={nama}
                 onChange={(e) => setNama(e.target.value)}
                 className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
@@ -192,8 +195,8 @@ export default function GenerusAdminPage() {
                   onChange={(e) => setJenisKelamin(e.target.value)}
                   className="w-full p-2 border rounded-lg outline-none bg-white"
                 >
-                  <option value="L">Laki-laki</option>
-                  <option value="P">Perempuan</option>
+                  <option value="Laki-laki">Laki-laki</option>
+                  <option value="Perempuan">Perempuan</option>
                 </select>
               </div>
 
@@ -201,7 +204,7 @@ export default function GenerusAdminPage() {
                 <label className="block font-medium text-slate-700 mb-1">Kelompok</label>
                 <input
                   type="text"
-                  placeholder="Contoh: Sembung"
+                  placeholder="Contoh: Gonjen"
                   value={kelompok}
                   onChange={(e) => setKelompok(e.target.value)}
                   className="w-full p-2 border rounded-lg outline-none"
