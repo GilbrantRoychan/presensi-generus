@@ -114,7 +114,7 @@ export default function RekapAdminEditPage() {
         acara_id: selectedAcara,
         status: currentState.status,
         alasan: currentState.status === 'izin' || currentState.status === 'sakit' ? currentState.alasan : '',
-        metode: 'manual_admin',
+        metode: 'Manual Admin',
       })
 
       if (error) {
