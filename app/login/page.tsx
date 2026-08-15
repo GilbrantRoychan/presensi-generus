@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LogIn, Lock } from 'lucide-react'
+import { LogIn, Lock, User } from 'lucide-react'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,13 +18,16 @@ export default function LoginPage() {
     setLoading(true)
     setErrorMsg('')
 
+    // Ubah username menjadi format email tiruan di balik layar
+    const formattedEmail = `${username.trim().toLowerCase()}@presensi.local`
+
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: formattedEmail,
       password,
     })
 
     if (error) {
-      setErrorMsg('Email atau password salah.')
+      setErrorMsg('Username atau password salah.')
       setLoading(false)
     } else {
       router.push('/admin/scan')
@@ -51,16 +54,19 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="admin@generus.com"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Masukkan username (contoh: admin)"
+              />
+            </div>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
@@ -72,6 +78,7 @@ export default function LoginPage() {
               placeholder="••••••••"
             />
           </div>
+
           <button
             type="submit"
             disabled={loading}
