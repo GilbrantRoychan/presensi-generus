@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Html5QrcodeScanner } from 'html5-qrcode'
-import { Camera, UserCheck, UserPlus, Calendar } from 'lucide-react'
+import { Camera, UserCheck, UserPlus, Calendar, CheckCircle2, AlertCircle, X } from 'lucide-react'
 
 export default function AdminScanPage() {
   const supabase = createClient()
@@ -11,27 +11,46 @@ export default function AdminScanPage() {
   const [selectedAcara, setSelectedAcara] = useState<string>('')
   const [generusList, setGenerusList] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<'ada' | 'baru'>('ada')
-  const [selectedGenerusId, setSelectedGenerusId] = useState<string>('')
   
-  // State Form Generus Baru (dengan Nilai Defaut Dropdown)
+  // State Input Manual Data Ada
+  const [selectedGenerusId, setSelectedGenerusId] = useState<string>('')
+
+  // State Form Generus Baru
   const [namaBaru, setNamaBaru] = useState('')
   const [kelompokBaru, setKelompokBaru] = useState('Gonjen 1')
   const [jkBaru, setJkBaru] = useState<'Laki-laki' | 'Perempuan'>('Laki-laki')
   const [kelasBaru, setKelasBaru] = useState('Pra Remaja')
 
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  // State Toast Notification Floating (Popup)
+  const [toast, setToast] = useState<{ show: boolean; text: string; type: 'success' | 'error' }>({
+    show: false,
+    text: '',
+    type: 'success'
+  })
+
+  // Ref penanda cegah pindaian berulang beruntun (Debounce)
+  const isProcessing = useRef(false)
 
   useEffect(() => {
     fetchAcara()
     fetchGenerus()
   }, [])
 
+  // Fungsi Tampil Toast Notification Singkat
+  const showToast = (text: string, type: 'success' | 'error') => {
+    setToast({ show: true, text, type })
+    setTimeout(() => {
+      setToast({ show: false, text: '', type: 'success' })
+    }, 3200)
+  }
+
+  // Scanner Kamera
   useEffect(() => {
     if (!selectedAcara) return
 
     const scanner = new Html5QrcodeScanner(
       'reader',
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
       false
     )
 
@@ -39,7 +58,7 @@ export default function AdminScanPage() {
       async (decodedText) => {
         await handleProcessPresensiByQR(decodedText)
       },
-      (error) => {}
+      () => {}
     )
 
     return () => {
@@ -49,35 +68,78 @@ export default function AdminScanPage() {
 
   const fetchAcara = async () => {
     const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
-    if (data) setAcaraList(data)
+    if (data && data.length > 0) {
+      setAcaraList(data)
+      setSelectedAcara(data[0].id) // Default acara paling awal
+    }
   }
 
   const fetchGenerus = async () => {
-    // Pengurutan Hirarki: Kelompok -> Nama -> Jenis Kelamin -> Kelas
-    const { data } = await supabase.from('generus').select('*')
+    const { data } = await supabase
+      .from('generus')
+      .select('*')
       .order('kelompok', { ascending: true })
       .order('nama', { ascending: true })
-      .order('jenis_kelamin', { ascending: true })
-      .order('kelas', { ascending: true })
     if (data) setGenerusList(data)
   }
 
-  const handleProcessPresensiByQR = async (qrCodeId: string) => {
-    if (!selectedAcara) {
-      setMessage({ text: 'Pilih acara terlebih dahulu!', type: 'error' })
-      return
-    }
-
-    const { data: gen } = await supabase.from('generus').select('id, nama').eq('qr_code_id', qrCodeId).single()
-    if (!gen) {
-      setMessage({ text: `Kode QR (${qrCodeId}) tidak ditemukan!`, type: 'error' })
-      return
-    }
-
-    await submitPresensi(gen.id, gen.nama, 'QR Scan')
+  // Reset Semua Form Input Manual
+  const resetForm = () => {
+    setSelectedGenerusId('')
+    setNamaBaru('')
+    setKelompokBaru('Gonjen 1')
+    setJkBaru('Laki-laki')
+    setKelasBaru('Pra Remaja')
   }
 
+  // 1. Logika Pemrosesan QR Code (Fixed: Mencari ID / QR Code ID)
+  const handleProcessPresensiByQR = async (rawCode: string) => {
+    if (isProcessing.current) return
+    isProcessing.current = true
+
+    if (!selectedAcara) {
+      showToast('Pilih acara terlebih dahulu!', 'error')
+      setTimeout(() => { isProcessing.current = false }, 2000)
+      return
+    }
+
+    const cleanCode = rawCode.trim()
+
+    // Cari berdasarkan ID (UUID) ATAU qr_code_id / qr_code
+    const { data: gen, error } = await supabase
+      .from('generus')
+      .select('id, nama')
+      .or(`id.eq.${cleanCode},qr_code_id.eq.${cleanCode},qr_code.eq.${cleanCode}`)
+      .maybeSingle()
+
+    if (error || !gen) {
+      showToast(`Kode QR (${cleanCode}) tidak ditemukan!`, 'error')
+    } else {
+      await submitPresensi(gen.id, gen.nama, 'QR Scan')
+    }
+
+    // Cooldown 2.5 detik agar kamera tidak me-rescan berulang-ulang
+    setTimeout(() => {
+      isProcessing.current = false
+    }, 2500)
+  }
+
+  // 2. Submit Presensi
   const submitPresensi = async (generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') => {
+    // Cek apakah sudah absen di acara ini
+    const { data: existing } = await supabase
+      .from('presensi')
+      .select('id')
+      .eq('acara_id', selectedAcara)
+      .eq('generus_id', generusId)
+      .maybeSingle()
+
+    if (existing) {
+      showToast(`${nama} sudah tercatat hadir sebelumnya!`, 'error')
+      resetForm()
+      return
+    }
+
     const { error } = await supabase.from('presensi').insert({
       generus_id: generusId,
       acara_id: selectedAcara,
@@ -86,57 +148,80 @@ export default function AdminScanPage() {
     })
 
     if (error) {
-      if (error.code === '23505') {
-        setMessage({ text: `${nama} sudah tercatat hadir sebelumnya!`, type: 'error' })
-      } else {
-        setMessage({ text: `Gagal mencatat presensi: ${error.message}`, type: 'error' })
-      }
+      showToast(`Gagal mencatat presensi: ${error.message}`, 'error')
     } else {
-      setMessage({ text: `Berhasil! ${nama} tercatat Hadir (${metode}).`, type: 'success' })
+      showToast(`Berhasil! ${nama} tercatat Hadir (${metode}).`, 'success')
+      resetForm() // Reset kolom input setelah berhasil
     }
   }
 
+  // Submit Manual Data Ada
   const handleManualAdaSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedAcara || !selectedGenerusId) return
-    const gen = generusList.find(g => g.id === selectedGenerusId)
+    const gen = generusList.find((g) => g.id === selectedGenerusId)
     if (gen) await submitPresensi(gen.id, gen.nama, 'Manual Admin')
   }
 
+  // Submit Manual Data Baru
   const handleManualBaruSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedAcara) return
 
-    const { data: newGen, error } = await supabase.from('generus').insert({
-      nama: namaBaru,
-      kelompok: kelompokBaru,
-      jenis_kelamin: jkBaru,
-      kelas: kelasBaru,
-      qr_code_id: `GEN-${Math.floor(1000 + Math.random() * 9000)}`
-    }).select().single()
+    const generatedQr = `GEN-${Math.floor(1000 + Math.random() * 9000)}`
+
+    const { data: newGen, error } = await supabase
+      .from('generus')
+      .insert({
+        nama: namaBaru,
+        kelompok: kelompokBaru,
+        jenis_kelamin: jkBaru,
+        kelas: kelasBaru,
+        qr_code_id: generatedQr
+      })
+      .select()
+      .single()
 
     if (error || !newGen) {
-      setMessage({ text: 'Gagal menambah generus baru.', type: 'error' })
+      showToast('Gagal menambah generus baru.', 'error')
       return
     }
 
     await fetchGenerus()
     await submitPresensi(newGen.id, newGen.nama, 'Manual Admin')
-    
-    // Reset Form
-    setNamaBaru('')
-    setKelompokBaru('Gonjen 1')
-    setJkBaru('Laki-laki')
-    setKelasBaru('Pra Remaja')
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      {/* 1. BAGIAN ATAS: Full-Width Card Pilih Acara */}
+    <div className="max-w-6xl mx-auto p-4 space-y-6 relative">
+      
+      {/* Toast Popup Notification Floating */}
+      {toast.show && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md transition-all duration-300">
+          <div
+            className={`p-4 rounded-2xl shadow-xl border flex items-center justify-between gap-3 text-white ${
+              toast.type === 'success' ? 'bg-emerald-600 border-emerald-500' : 'bg-red-600 border-red-500'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 text-xs sm:text-sm font-semibold">
+              {toast.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 shrink-0" />
+              )}
+              <span>{toast.text}</span>
+            </div>
+            <button onClick={() => setToast({ ...toast, show: false })} className="p-1 hover:bg-white/20 rounded-lg">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bagian Pilihan Acara */}
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
         <label className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-3">
           <Calendar className="w-5 h-5 text-blue-600" />
-          1. Pilih Acara Terlebih Dahulu:
+          Pilih Acara Presensi:
         </label>
         <select
           value={selectedAcara}
@@ -152,15 +237,10 @@ export default function AdminScanPage() {
         </select>
       </div>
 
-      {message && (
-        <div className={`p-4 rounded-lg text-white font-medium text-sm ${message.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* 2. BAGIAN BAWAH: 2 Kolom Layout Grid */}
+      {/* Layout Grid 2 Kolom */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Kolom A: Pemindai Kamera QR Code */}
+        
+        {/* Kolom A: Kamera QR */}
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center">
           <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-4">
             <Camera className="w-5 h-5 text-blue-600" />
@@ -178,8 +258,8 @@ export default function AdminScanPage() {
         {/* Kolom B: Presensi Manual */}
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
           <h2 className="text-lg font-bold text-gray-800 mb-4">Kolom B: Presensi Manual</h2>
-          
-          {/* Tab Switcher Toggle */}
+
+          {/* Toggle Tab */}
           <div className="flex border-b mb-6 text-sm">
             <button
               onClick={() => setActiveTab('ada')}
@@ -199,7 +279,7 @@ export default function AdminScanPage() {
             </button>
           </div>
 
-          {/* Tab 1: Pilih Data Ada */}
+          {/* Tab 1: Data Ada */}
           {activeTab === 'ada' && (
             <form onSubmit={handleManualAdaSubmit} className="space-y-4">
               <div>
@@ -228,7 +308,7 @@ export default function AdminScanPage() {
             </form>
           )}
 
-          {/* Tab 2: + Generus Baru (Menggunakan Dropdown Standar) */}
+          {/* Tab 2: Data Baru */}
           {activeTab === 'baru' && (
             <form onSubmit={handleManualBaruSubmit} className="space-y-3 text-xs sm:text-sm">
               <div>
