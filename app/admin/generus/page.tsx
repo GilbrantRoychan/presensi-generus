@@ -441,13 +441,16 @@ export default function AdminGenerusPage() {
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Kelompok</label>
-                <input
-                  type="text"
+                <select
                   value={formData.kelompok}
                   onChange={(e) => setFormData({ ...formData, kelompok: e.target.value })}
-                  placeholder="Contoh: Gonjen 1"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="Gonjen 1">Gonjen 1</option>  
+                  <option value="Gonjen 2">Gonjen 2</option>
+                  <option value="Gonjen 3">Kembaran</option>
+                  <option value="Gonjen 4">Sembung</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -465,13 +468,16 @@ export default function AdminGenerusPage() {
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Kelas / Tingkat</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.kelas}
                     onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}
-                    placeholder="Contoh: Pra Remaja"
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              >
+                    <option value="Pra Remaja">Pra Remaja</option>
+                    <option value="Remaja">Remaja</option>
+                    <option value="Pra Nikah">Pra Nikah</option>
+                    <option value="Mandiri">Mandiri</option>
+                  </select>
                 </div>
               </div>
 
