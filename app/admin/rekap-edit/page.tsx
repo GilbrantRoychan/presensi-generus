@@ -158,12 +158,12 @@ export default function RekapEditPage() {
   })
 
   const persentaseHadir = totalGenerus > 0 ? ((totalHadir / totalGenerus) * 100).toFixed(1) : '0'
+  const currentAcaraInfo = acaraList.find((a) => a.id === selectedAcara)
 
   // Fitur Export ke Excel
   const handleExportExcel = () => {
     if (!selectedAcara) return alert('Pilih acara terlebih dahulu!')
 
-    const currentAcaraInfo = acaraList.find((a) => a.id === selectedAcara)
     const namaAcaraStr = currentAcaraInfo ? `${currentAcaraInfo.nama_acara} (${currentAcaraInfo.tanggal})` : 'Acara'
 
     const exportData = filteredGenerus.map((g, index) => {
@@ -183,30 +183,45 @@ export default function RekapEditPage() {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Presensi')
 
-    // Set auto column width
     const max_width = exportData.reduce((w, r) => Math.max(w, r['Nama Lengkap'].length), 10)
     worksheet['!cols'] = [
-      { wch: 5 },  // No
-      { wch: max_width + 5 }, // Nama
-      { wch: 15 }, // JK
-      { wch: 15 }, // Kelompok
-      { wch: 15 }, // Kelas
-      { wch: 22 }, // Status
-      { wch: 25 }  // Alasan
+      { wch: 5 },
+      { wch: max_width + 5 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 22 },
+      { wch: 25 }
     ]
 
-    XLSX.writeFile(workbook, `Rekap_Presensi_Edit_${namaAcaraStr.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`)
+    XLSX.writeFile(workbook, `Rekap_Presensi_${namaAcaraStr.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`)
   }
 
-  // Fitur Print PDF
   const handlePrint = () => {
     if (!selectedAcara) return alert('Pilih acara terlebih dahulu!')
     window.print()
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 print:shadow-none print:border-none print:p-0">
+    <div className="max-w-6xl mx-auto p-4 space-y-6 print:p-0 print:max-w-none">
+      
+      {/* Header Khusus Print (Tampak Hanya Saat Cetak PDF) */}
+      {selectedAcara && currentAcaraInfo && (
+        <div className="hidden print:block mb-6 pb-4 border-b border-gray-300">
+          <h1 className="text-2xl font-bold text-center text-slate-900 mb-4 uppercase tracking-wide">
+            Laporan Rekapitulasi Presensi
+          </h1>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-700 font-medium">
+            <p><span className="font-bold">Nama Acara:</span> {currentAcaraInfo.nama_acara}</p>
+            <p><span className="font-bold">Tanggal:</span> {currentAcaraInfo.tanggal}</p>
+            <p><span className="font-bold">Lokasi:</span> {currentAcaraInfo.lokasi || '-'}</p>
+            <p><span className="font-bold">Koordinator:</span> {currentAcaraInfo.koor || '-'}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Header Utama Web */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 print:shadow-none print:border-none print:p-0 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Rekap Presensi & Control Status</h1>
@@ -215,9 +230,8 @@ export default function RekapEditPage() {
             </p>
           </div>
 
-          {/* Tombol Export & Print */}
           {selectedAcara && (
-            <div className="flex items-center gap-2 print:hidden">
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
                 className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm"
@@ -234,8 +248,8 @@ export default function RekapEditPage() {
           )}
         </div>
 
-        {/* Dropdown Acara, Filter Kelompok & Jenis Kelamin */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 print:hidden">
+        {/* Dropdown Acara & Filter */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
             <select
@@ -284,31 +298,31 @@ export default function RekapEditPage() {
 
       {/* Kartu Statistik Rekap Kehadiran */}
       {selectedAcara && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 print:grid-cols-5 print:gap-2 mb-4">
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 print:border-gray-300 print:p-2">
             <p className="text-xs text-gray-500 font-medium">Total Generus</p>
-            <p className="text-xl font-bold text-gray-800">{totalGenerus}</p>
+            <p className="text-xl font-bold text-gray-800 print:text-base">{totalGenerus}</p>
           </div>
-          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 print:border-gray-300 print:p-2">
             <p className="text-xs text-gray-500 font-medium">Hadir</p>
-            <p className="text-xl font-bold text-green-600">{totalHadir}</p>
+            <p className="text-xl font-bold text-green-600 print:text-base">{totalHadir}</p>
           </div>
-          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 print:border-gray-300 print:p-2">
             <p className="text-xs text-gray-500 font-medium">Izin</p>
-            <p className="text-xl font-bold text-amber-600">{totalIzin}</p>
+            <p className="text-xl font-bold text-amber-600 print:text-base">{totalIzin}</p>
           </div>
-          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100">
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 print:border-gray-300 print:p-2">
             <p className="text-xs text-gray-500 font-medium">Alpa</p>
-            <p className="text-xl font-bold text-gray-400">{totalAlpa}</p>
+            <p className="text-xl font-bold text-gray-400 print:text-base">{totalAlpa}</p>
           </div>
-          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 col-span-2 sm:col-span-1">
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 col-span-2 sm:col-span-1 print:col-span-1 print:border-gray-300 print:p-2">
             <p className="text-xs text-gray-500 font-medium">Persentase</p>
-            <p className="text-xl font-bold text-blue-600">{persentaseHadir}%</p>
+            <p className="text-xl font-bold text-blue-600 print:text-base">{persentaseHadir}%</p>
           </div>
         </div>
       )}
 
-      {/* Box Search */}
+      {/* Search Input (Di-hide saat Cetak) */}
       <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative print:hidden">
         <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400" />
         <input
@@ -321,7 +335,7 @@ export default function RekapEditPage() {
       </div>
 
       {/* Tabel Data Rekap */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-none">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden print:shadow-none print:border-gray-300">
         {!selectedAcara ? (
           <div className="p-8 text-center text-gray-400 text-sm print:hidden">
             Silakan pilih acara terlebih dahulu untuk menampilkan daftar rekap presensi.
@@ -330,59 +344,75 @@ export default function RekapEditPage() {
           <div className="p-8 text-center text-gray-500 text-sm print:hidden">Memuat data rekap...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500 font-semibold">
+            <table className="w-full text-left text-sm print:text-xs border-collapse">
+              <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500 font-semibold print:bg-gray-100">
                 <tr>
-                  <th className="p-4">Nama Generus</th>
-                  <th className="p-4">Kelompok / Kelas</th>
-                  <th className="p-4">Status Kehadiran</th>
-                  <th className="p-4">Alasan (Izin / Sakit)</th>
+                  <th className="p-4 print:p-2 print:border print:border-gray-300">Nama Generus</th>
+                  <th className="p-4 print:p-2 print:border print:border-gray-300">Kelompok / Kelas</th>
+                  <th className="p-4 print:p-2 print:border print:border-gray-300">Status Kehadiran</th>
+                  <th className="p-4 print:p-2 print:border print:border-gray-300">Alasan (Izin / Sakit)</th>
                   <th className="p-4 text-center print:hidden">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 print:divide-y-0">
                 {filteredGenerus.map((g) => {
                   const currentPresensi = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '' }
 
                   return (
-                    <tr key={g.id} className="hover:bg-gray-50/50 transition">
-                      <td className="p-4">
+                    <tr key={g.id} className="hover:bg-gray-50/50 transition print:hover:bg-transparent">
+                      <td className="p-4 print:p-2 print:border print:border-gray-300">
                         <div className="font-semibold text-gray-800">{g.nama}</div>
-                        <div className="text-xs text-gray-400">{g.jenis_kelamin}</div>
+                        <div className="text-xs text-gray-400 print:text-gray-600">{g.jenis_kelamin}</div>
                       </td>
-                      <td className="p-4 text-gray-600">
+                      <td className="p-4 text-gray-600 print:p-2 print:border print:border-gray-300">
                         <div>{g.kelompok}</div>
-                        <div className="text-xs text-gray-400">{g.kelas}</div>
+                        <div className="text-xs text-gray-400 print:text-gray-600">{g.kelas}</div>
                       </td>
-                      <td className="p-4">
-                        <select
-                          value={currentPresensi.status}
-                          onChange={(e) => handleStatusChange(g.id, e.target.value)}
-                          className={`p-2 border rounded-lg text-xs font-semibold outline-none ${
-                            currentPresensi.status === 'Hadir'
-                              ? 'border-green-300 bg-green-50 text-green-700'
-                              : currentPresensi.status === 'Izin'
-                              ? 'border-amber-300 bg-amber-50 text-amber-700'
-                              : 'border-gray-200 bg-gray-50 text-gray-600'
-                          }`}
-                        >
-                          <option value="Hadir">Hadir</option>
-                          <option value="Izin">Izin</option>
-                          <option value="Alpa / Belum Presensi">Alpa / Belum Presensi</option>
-                        </select>
+                      <td className="p-4 print:p-2 print:border print:border-gray-300">
+                        {/* Tampilan Web Interaktif */}
+                        <div className="print:hidden">
+                          <select
+                            value={currentPresensi.status}
+                            onChange={(e) => handleStatusChange(g.id, e.target.value)}
+                            className={`p-2 border rounded-lg text-xs font-semibold outline-none ${
+                              currentPresensi.status === 'Hadir'
+                                ? 'border-green-300 bg-green-50 text-green-700'
+                                : currentPresensi.status === 'Izin'
+                                ? 'border-amber-300 bg-amber-50 text-amber-700'
+                                : 'border-gray-200 bg-gray-50 text-gray-600'
+                            }`}
+                          >
+                            <option value="Hadir">Hadir</option>
+                            <option value="Izin">Izin</option>
+                            <option value="Alpa / Belum Presensi">Alpa / Belum Presensi</option>
+                          </select>
+                        </div>
+
+                        {/* Tampilan Cetak Read-only */}
+                        <div className="hidden print:block font-semibold">
+                          {currentPresensi.status}
+                        </div>
                       </td>
-                      <td className="p-4">
-                        {currentPresensi.status === 'Izin' ? (
-                          <input
-                            type="text"
-                            placeholder="Alasan izin..."
-                            value={currentPresensi.alasan}
-                            onChange={(e) => handleAlasanChange(g.id, e.target.value)}
-                            className="w-full p-2 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-amber-500"
-                          />
-                        ) : (
-                          <span className="text-gray-300 text-xs">-</span>
-                        )}
+                      <td className="p-4 print:p-2 print:border print:border-gray-300">
+                        {/* Tampilan Web Interaktif */}
+                        <div className="print:hidden">
+                          {currentPresensi.status === 'Izin' ? (
+                            <input
+                              type="text"
+                              placeholder="Alasan izin..."
+                              value={currentPresensi.alasan}
+                              onChange={(e) => handleAlasanChange(g.id, e.target.value)}
+                              className="w-full p-2 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-amber-500"
+                            />
+                          ) : (
+                            <span className="text-gray-300 text-xs">-</span>
+                          )}
+                        </div>
+
+                        {/* Tampilan Cetak Read-only */}
+                        <div className="hidden print:block">
+                          {currentPresensi.status === 'Izin' ? currentPresensi.alasan || '-' : '-'}
+                        </div>
                       </td>
                       <td className="p-4 text-center print:hidden">
                         <button
@@ -402,6 +432,7 @@ export default function RekapEditPage() {
           </div>
         )}
       </div>
+
     </div>
   )
 }
