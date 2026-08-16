@@ -1,301 +1,308 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Html5QrcodeScanner } from 'html5-qrcode'
-import { Camera, UserCheck, UserPlus, Calendar } from 'lucide-react'
+import { Camera, CheckCircle2, AlertCircle, X, UserCheck } from 'lucide-react'
 
-export default function AdminScanPage() {
+interface Generus {
+  id: string
+  nama: string
+  qr_code?: string
+}
+
+interface Acara {
+  id: string
+  nama_acara: string
+}
+
+export default function ScanPage() {
   const supabase = createClient()
-  const [acaraList, setAcaraList] = useState<any[]>([])
-  const [selectedAcara, setSelectedAcara] = useState<string>('')
-  const [generusList, setGenerusList] = useState<any[]>([])
-  const [activeTab, setActiveTab] = useState<'ada' | 'baru'>('ada')
-  const [selectedGenerusId, setSelectedGenerusId] = useState<string>('')
-  
-  // State Form Generus Baru (dengan Nilai Defaut Dropdown)
-  const [namaBaru, setNamaBaru] = useState('')
-  const [kelompokBaru, setKelompokBaru] = useState('Gonjen 1')
-  const [jkBaru, setJkBaru] = useState<'Laki-laki' | 'Perempuan'>('Laki-laki')
-  const [kelasBaru, setKelasBaru] = useState('Pra Remaja')
 
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  // State Utama
+  const [acaraList, setAcaraList] = useState<Acara[]>([])
+  const [generusList, setGenerusList] = useState<Generus[]>([])
+  const [selectedAcara, setSelectedAcara] = useState<string>('')
+
+  // State Form Manual (2 pilihan terpisah)
+  const [selectedGenerusId, setSelectedGenerusId] = useState<string>('')
+  const [selectedGenerusNama, setSelectedGenerusNama] = useState<string>('')
+
+  // State Toast Notification Popup
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success',
+  })
+
+  // Ref penanda agar scan tidak dieksekusi berulang kali bersamaan (Debounce)
+  const isProcessing = useRef(false)
 
   useEffect(() => {
     fetchAcara()
     fetchGenerus()
   }, [])
 
-  useEffect(() => {
-    if (!selectedAcara) return
+  // Fungsi Tampil Toast Popup
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ show: true, message, type })
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' })
+    }, 3500)
+  }
 
-    const scanner = new Html5QrcodeScanner(
-      'reader',
-      { fps: 10, qrbox: { width: 250, height: 250 } },
-      false
-    )
-
-    scanner.render(
-      async (decodedText) => {
-        await handleProcessPresensiByQR(decodedText)
-      },
-      (error) => {}
-    )
-
-    return () => {
-      scanner.clear().catch(() => {})
-    }
-  }, [selectedAcara])
-
+  // 1. Fetch Acara & Generus
   const fetchAcara = async () => {
-    const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
-    if (data) setAcaraList(data)
+    const { data } = await supabase.from('acara').select('id, nama_acara').order('created_at', { ascending: false })
+    if (data && data.length > 0) {
+      setAcaraList(data)
+      setSelectedAcara(data[0].id) // Default acara terbaru
+    }
   }
 
   const fetchGenerus = async () => {
-    // Pengurutan Hirarki: Kelompok -> Nama -> Jenis Kelamin -> Kelas
-    const { data } = await supabase.from('generus').select('*')
-      .order('kelompok', { ascending: true })
-      .order('nama', { ascending: true })
-      .order('jenis_kelamin', { ascending: true })
-      .order('kelas', { ascending: true })
+    const { data } = await supabase.from('generus').select('id, nama, qr_code').order('nama', { ascending: true })
     if (data) setGenerusList(data)
   }
 
-  const handleProcessPresensiByQR = async (qrCodeId: string) => {
+  // 2. Inisialisasi Scanner Kamera
+  useEffect(() => {
+    const scanner = new Html5QrcodeScanner(
+      'reader',
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        rememberLastUsedCamera: true,
+      },
+      /* verbose= */ false
+    )
+
+    scanner.render(onScanSuccess, onScanFailure)
+
+    return () => {
+      scanner.clear().catch((error) => console.error('Gagal membersihkan scanner:', error))
+    }
+  }, [selectedAcara])
+
+  // 3. Logika Proses Scan QR Code
+  const onScanSuccess = async (decodedText: string) => {
+    if (isProcessing.current) return
+    isProcessing.current = true
+
     if (!selectedAcara) {
-      setMessage({ text: 'Pilih acara terlebih dahulu!', type: 'error' })
+      showToast('Pilih acara terlebih dahulu sebelum melakukan scan!', 'error')
+      setTimeout(() => { isProcessing.current = false }, 2000)
       return
     }
 
-    const { data: gen } = await supabase.from('generus').select('id, nama').eq('qr_code_id', qrCodeId).single()
-    if (!gen) {
-      setMessage({ text: `Kode QR (${qrCodeId}) tidak ditemukan!`, type: 'error' })
-      return
-    }
+    const cleanCode = decodedText.trim()
 
-    await submitPresensi(gen.id, gen.nama, 'QR Scan')
-  }
+    // Cari di database: Cek berdasarkan ID (UUID) ATAU Kolom QR Code Singkat
+    const { data: foundGenerus, error } = await supabase
+      .from('generus')
+      .select('id, nama')
+      .or(`id.eq.${cleanCode},qr_code.eq.${cleanCode}`)
+      .maybeSingle()
 
-  const submitPresensi = async (generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') => {
-    const { error } = await supabase.from('presensi').insert({
-      generus_id: generusId,
-      acara_id: selectedAcara,
-      status: 'Hadir',
-      metode: metode
-    })
-
-    if (error) {
-      if (error.code === '23505') {
-        setMessage({ text: `${nama} sudah tercatat hadir sebelumnya!`, type: 'error' })
-      } else {
-        setMessage({ text: `Gagal mencatat presensi: ${error.message}`, type: 'error' })
-      }
+    if (error || !foundGenerus) {
+      showToast(`Kode QR (${cleanCode}) tidak terdaftar di sistem!`, 'error')
     } else {
-      setMessage({ text: `Berhasil! ${nama} tercatat Hadir (${metode}).`, type: 'success' })
+      await submitPresensi(foundGenerus.id, foundGenerus.nama, 'Scan QR')
     }
+
+    // Debounce 2.5 detik agar kamera tidak langsung me-rescan orang yang sama
+    setTimeout(() => {
+      isProcessing.current = false
+    }, 2500)
   }
 
-  const handleManualAdaSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedAcara || !selectedGenerusId) return
-    const gen = generusList.find(g => g.id === selectedGenerusId)
-    if (gen) await submitPresensi(gen.id, gen.nama, 'Manual Admin')
+  const onScanFailure = (error: any) => {
+    // Abaikan error per-frame pencarian biasa dari library html5-qrcode
   }
 
-  const handleManualBaruSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedAcara) return
+  // 4. Submit Presensi ke Database
+  const submitPresensi = async (generusId: string, nama: string, metode: string) => {
+    // Cek apakah sudah absen pada acara ini
+    const { data: existing } = await supabase
+      .from('presensi')
+      .select('id')
+      .eq('acara_id', selectedAcara)
+      .eq('generus_id', generusId)
+      .maybeSingle()
 
-    const { data: newGen, error } = await supabase.from('generus').insert({
-      nama: namaBaru,
-      kelompok: kelompokBaru,
-      jenis_kelamin: jkBaru,
-      kelas: kelasBaru,
-      qr_code_id: `GEN-${Math.floor(1000 + Math.random() * 9000)}`
-    }).select().single()
-
-    if (error || !newGen) {
-      setMessage({ text: 'Gagal menambah generus baru.', type: 'error' })
+    if (existing) {
+      showToast(`${nama} sudah melakukan presensi sebelumnya!`, 'error')
+      resetFormManual()
       return
     }
 
-    await fetchGenerus()
-    await submitPresensi(newGen.id, newGen.nama, 'Manual Admin')
-    
-    // Reset Form
-    setNamaBaru('')
-    setKelompokBaru('Gonjen 1')
-    setJkBaru('Laki-laki')
-    setKelasBaru('Pra Remaja')
+    // Insert Presensi
+    const { error: insertError } = await supabase.from('presensi').insert([
+      {
+        acara_id: selectedAcara,
+        generus_id: generusId,
+        nama_generus: nama,
+        metode_absen: metode,
+        waktu_absen: new Date().toISOString(),
+      },
+    ])
+
+    if (insertError) {
+      showToast(`Gagal menyimpan data: ${insertError.message}`, 'error')
+    } else {
+      showToast(`Berhasil! Presensi atas nama ${nama} tersimpan.`, 'success')
+      resetFormManual()
+    }
+  }
+
+  // 5. Submit Manual
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAcara) return showToast('Pilih acara terlebih dahulu!', 'error')
+    if (!selectedGenerusId || !selectedGenerusNama) return showToast('Pilih data generus secara lengkap!', 'error')
+
+    await submitPresensi(selectedGenerusId, selectedGenerusNama, 'Manual Admin')
+  }
+
+  // Reset form manual
+  const resetFormManual = () => {
+    setSelectedGenerusId('')
+    setSelectedGenerusNama('')
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
-      {/* 1. BAGIAN ATAS: Full-Width Card Pilih Acara */}
-      <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-        <label className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-3">
-          <Calendar className="w-5 h-5 text-blue-600" />
-          1. Pilih Acara Terlebih Dahulu:
-        </label>
-        <select
-          value={selectedAcara}
-          onChange={(e) => setSelectedAcara(e.target.value)}
-          className="w-full p-3 border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 font-medium text-sm sm:text-base outline-none"
-        >
-          <option value="">-- Pilih Acara Aktif --</option>
-          {acaraList.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.nama_acara} - {a.tanggal} ({a.lokasi})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {message && (
-        <div className={`p-4 rounded-lg text-white font-medium text-sm ${message.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {message.text}
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
+      
+      {/* Toast Notification Popup Floating */}
+      {toast.show && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-md animate-in fade-in slide-in-from-top-4 duration-300">
+          <div
+            className={`p-4 rounded-2xl shadow-xl border flex items-center justify-between gap-3 ${
+              toast.type === 'success'
+                ? 'bg-emerald-600 text-white border-emerald-500'
+                : 'bg-red-600 text-white border-red-500'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 text-sm font-semibold">
+              {toast.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 shrink-0" />
+              )}
+              <span>{toast.message}</span>
+            </div>
+            <button
+              onClick={() => setToast({ ...toast, show: false })}
+              className="p-1 rounded-lg hover:bg-white/20 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* 2. BAGIAN BAWAH: 2 Kolom Layout Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Kolom A: Pemindai Kamera QR Code */}
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 flex flex-col items-center">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-4">
-            <Camera className="w-5 h-5 text-blue-600" />
-            Kolom A: Pemindai Kamera QR Code
-          </h2>
-          {!selectedAcara ? (
-            <div className="h-64 flex items-center justify-center text-gray-400 text-center text-sm">
-              Pilih acara di atas untuk mengaktifkan scanner kamera.
-            </div>
-          ) : (
-            <div id="reader" className="w-full"></div>
-          )}
+      <main className="max-w-4xl mx-auto px-4 pt-8 space-y-6">
+        
+        {/* Header & Input Pilihan Acara */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+          <label className="block text-xs font-extrabold text-slate-600 uppercase tracking-wider">
+            Pilih Acara Presensi
+          </label>
+          <select
+            value={selectedAcara}
+            onChange={(e) => setSelectedAcara(e.target.value)}
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {acaraList.length === 0 ? (
+              <option value="">-- Belum Ada Acara --</option>
+            ) : (
+              acaraList.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nama_acara}
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
-        {/* Kolom B: Presensi Manual */}
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Kolom B: Presensi Manual</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          {/* Tab Switcher Toggle */}
-          <div className="flex border-b mb-6 text-sm">
-            <button
-              onClick={() => setActiveTab('ada')}
-              className={`flex-1 py-2 font-medium flex items-center justify-center gap-2 border-b-2 ${
-                activeTab === 'ada' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" /> Pilih Data Ada
-            </button>
-            <button
-              onClick={() => setActiveTab('baru')}
-              className={`flex-1 py-2 font-medium flex items-center justify-center gap-2 border-b-2 ${
-                activeTab === 'baru' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'
-              }`}
-            >
-              <UserPlus className="w-4 h-4" /> + Generus Baru
-            </button>
+          {/* Kolom A: Kamera Pemindai QR */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm border-b border-slate-100 pb-3">
+              <Camera className="w-4 h-4 text-blue-600" />
+              <span>Pemindai Kamera QR Code</span>
+            </div>
+
+            <div id="reader" className="overflow-hidden rounded-xl border border-slate-200" />
           </div>
 
-          {/* Tab 1: Pilih Data Ada */}
-          {activeTab === 'ada' && (
-            <form onSubmit={handleManualAdaSubmit} className="space-y-4">
+          {/* Kolom B: Presensi Manual */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm border-b border-slate-100 pb-3">
+              <UserCheck className="w-4 h-4 text-blue-600" />
+              <span>Input Presensi Manual</span>
+            </div>
+
+            <form onSubmit={handleManualSubmit} className="space-y-4 text-xs sm:text-sm">
+              {/* Dropdown 1: Pilih ID */}
               <div>
-                <label className="block text-sm font-medium mb-1 text-slate-700">Cari Nama Generus</label>
+                <label className="block font-bold text-slate-700 mb-1">Pilih ID Generus</label>
                 <select
                   value={selectedGenerusId}
-                  onChange={(e) => setSelectedGenerusId(e.target.value)}
-                  className="w-full p-2.5 border rounded-lg text-xs sm:text-sm bg-white outline-none"
-                  disabled={!selectedAcara}
+                  onChange={(e) => {
+                    const idSelected = e.target.value
+                    setSelectedGenerusId(idSelected)
+                    const found = generusList.find((g) => g.id === idSelected)
+                    if (found) setSelectedGenerusNama(found.nama)
+                    else setSelectedGenerusNama('')
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 >
-                  <option value="">-- Pilih Generus --</option>
+                  <option value="">-- Pilih ID Generus --</option>
                   {generusList.map((g) => (
                     <option key={g.id} value={g.id}>
-                      {g.kelompok} - {g.nama} ({g.jenis_kelamin}, {g.kelas})
+                      {g.qr_code ? `${g.qr_code} (${g.id.slice(0, 6)}...)` : g.id}
                     </option>
                   ))}
                 </select>
               </div>
-              <button
-                type="submit"
-                disabled={!selectedAcara || !selectedGenerusId}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 text-xs sm:text-sm transition"
-              >
-                Submit Presensi
-              </button>
-            </form>
-          )}
 
-          {/* Tab 2: + Generus Baru (Menggunakan Dropdown Standar) */}
-          {activeTab === 'baru' && (
-            <form onSubmit={handleManualBaruSubmit} className="space-y-3 text-xs sm:text-sm">
+              {/* Dropdown 2: Pilih Nama */}
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Nama Lengkap</label>
-                <input
-                  type="text"
-                  placeholder="Masukkan Nama Lengkap"
-                  value={namaBaru}
-                  onChange={(e) => setNamaBaru(e.target.value)}
-                  required
-                  className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Kelompok</label>
-                  <select
-                    value={kelompokBaru}
-                    onChange={(e) => setKelompokBaru(e.target.value)}
-                    className="w-full p-2.5 border rounded-lg outline-none bg-white"
-                  >
-                    <option value="Gonjen 1">Gonjen 1</option>
-                    <option value="Gonjen 2">Gonjen 2</option>
-                    <option value="Kembaran">Kembaran</option>
-                    <option value="Sembung">Sembung</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Jenis Kelamin</label>
-                  <select
-                    value={jkBaru}
-                    onChange={(e) => setJkBaru(e.target.value as any)}
-                    className="w-full p-2.5 border rounded-lg outline-none bg-white"
-                  >
-                    <option value="Laki-laki">Laki-laki</option>
-                    <option value="Perempuan">Perempuan</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">Kelas / Usia</label>
+                <label className="block font-bold text-slate-700 mb-1">Pilih Nama Generus</label>
                 <select
-                  value={kelasBaru}
-                  onChange={(e) => setKelasBaru(e.target.value)}
-                  className="w-full p-2.5 border rounded-lg outline-none bg-white"
+                  value={selectedGenerusNama}
+                  onChange={(e) => {
+                    const namaSelected = e.target.value
+                    setSelectedGenerusNama(namaSelected)
+                    const found = generusList.find((g) => g.nama === namaSelected)
+                    if (found) setSelectedGenerusId(found.id)
+                    else setSelectedGenerusId('')
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                 >
-                  <option value="Pra Remaja">Pra Remaja</option>
-                  <option value="Remaja">Remaja</option>
-                  <option value="Pra Nikah">Pra Nikah</option>
-                  <option value="Mandiri">Mandiri</option>
+                  <option value="">-- Pilih Nama Generus --</option>
+                  {generusList.map((g) => (
+                    <option key={g.id} value={g.nama}>
+                      {g.nama}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <button
                 type="submit"
-                disabled={!selectedAcara}
-                className="w-full py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 transition mt-2"
+                disabled={!selectedGenerusId}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-bold transition shadow-md shadow-blue-500/20"
               >
-                Simpan & Catat Presensi
+                Simpan Presensi Manual
               </button>
             </form>
-          )}
+          </div>
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }

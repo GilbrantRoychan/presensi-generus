@@ -115,7 +115,7 @@ export default function AdminAcaraPage() {
                 onChange={(e) => setKoor(e.target.value)}
                 required
                 className="w-full p-2.5 border rounded-lg text-sm"
-                placeholder="Contoh: Ust. Budi"
+                placeholder="Contoh: Ahmad"
               />
             </div>
             <button
