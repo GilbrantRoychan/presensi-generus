@@ -10,6 +10,7 @@ import { Search, Download, Folder, Users, Image as ImageIcon, Sparkles } from 'l
 // Interface untuk data Generus
 interface Generus {
   id: string
+  qr_code_id?: string
   nama: string
   kelompok: string
   kelas?: string
@@ -239,7 +240,7 @@ export default function QRCodePage() {
                     {/* Menggunakan Tailwind v4 `w-55` (sebanding dengan 220px) */}
                     <div
                       ref={(el) => {
-                        cardRefs.current[g.id] = el
+                        cardRefs.current[g.qr_code_id || g.id] = el
                       }}
                       className="w-55 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center text-center space-y-3"
                     >
@@ -249,7 +250,7 @@ export default function QRCodePage() {
 
                       <div className="p-2.5 bg-white border border-gray-100 rounded-xl shadow-inner">
                         <QRCodeSVG
-                          value={g.id}
+                          value={g.qr_code_id || g.id}
                           size={135}
                           level="H"
                           includeMargin={false}
