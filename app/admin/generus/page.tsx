@@ -7,7 +7,6 @@ import {
   Users, 
   Search, 
   Plus, 
-  Download, 
   Upload, 
   Edit, 
   Trash2, 
@@ -25,6 +24,36 @@ interface Generus {
   jenis_kelamin: string
   kelas?: string
   qr_code?: string
+  qr_code_id?: string
+}
+
+// Urutan prioritas kelompok kustom
+const KELOMPOK_ORDER = ['Gonjen 1', 'Gonjen 2', 'Kembaran', 'Sembung']
+
+// Helper function untuk mengurutkan: Kelompok -> Nama
+const sortGenerus = (data: Generus[]) => {
+  return [...data].sort((a, b) => {
+    const orderA = KELOMPOK_ORDER.indexOf(a.kelompok)
+    const orderB = KELOMPOK_ORDER.indexOf(b.kelompok)
+
+    // Jika kelompok A dan B ada di daftar acuan
+    if (orderA !== -1 && orderB !== -1) {
+      if (orderA !== orderB) {
+        return orderA - orderB
+      }
+    } else if (orderA !== -1) {
+      return -1
+    } else if (orderB !== -1) {
+      return 1
+    } else {
+      // Jika kelompok tidak ada di daftar acuan, bandingkan nama kelompok secara alfabetis
+      const kelCompare = (a.kelompok || '').localeCompare(b.kelompok || '')
+      if (kelCompare !== 0) return kelCompare
+    }
+
+    // Jika kelompok sama, urutkan berdasarkan Nama (A-Z)
+    return a.nama.localeCompare(b.nama)
+  })
 }
 
 export default function AdminGenerusPage() {
@@ -55,16 +84,16 @@ export default function AdminGenerusPage() {
     fetchGenerus()
   }, [])
 
-  // 1. Fetch Data dari Supabase
+  // 1. Fetch Data dari Supabase & Urutkan secara Kustom
   const fetchGenerus = async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('generus')
       .select('*')
-      .order('nama', { ascending: true })
 
     if (data && !error) {
-      setGenerusList(data as Generus[])
+      const sortedData = sortGenerus(data as Generus[])
+      setGenerusList(sortedData)
     }
     setLoading(false)
   }
@@ -109,7 +138,6 @@ export default function AdminGenerusPage() {
 
   // 3. Fungsi Hapus Data
   const handleDelete = async (id: string, nama: string) => {
-
     if (confirm(`Apakah Anda yakin ingin menghapus data ${nama}?`)) {
       const { error } = await supabase
         .from('generus')
@@ -222,7 +250,7 @@ export default function AdminGenerusPage() {
     setEditingData(null)
   }
 
-  // 1. Filtering Data berdasarkan Kelompok dan Pencarian
+  // Filtering Data berdasarkan Kelompok dan Pencarian
   const kelompokList = Array.from(new Set(generusList.map(g => g.kelompok).filter(Boolean)))
   
   const filteredGenerus = generusList.filter(g => {
@@ -232,7 +260,7 @@ export default function AdminGenerusPage() {
     return matchKelompok && matchSearch
   })
 
-  // 2. Ringkasan Statistik Dinamis (Mengikuti Data yang Difilter)
+  // Ringkasan Statistik Dinamis (Mengikuti Data yang Difilter)
   const totalGenerus = filteredGenerus.length
   const totalLaki = filteredGenerus.filter(g => g.jenis_kelamin?.toLowerCase().includes('laki')).length
   const totalPerempuan = filteredGenerus.filter(g => g.jenis_kelamin?.toLowerCase().includes('perempuan')).length
@@ -383,7 +411,7 @@ export default function AdminGenerusPage() {
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 font-medium">{item.kelas || '-'}</td>
                       <td className="py-3.5 px-4 text-center font-mono text-slate-400 text-xs">
-                        {item.qr_code || item.id?.slice(0, 6).toUpperCase() || '-'}
+                        {item.qr_code_id || item.qr_code || item.id?.slice(0, 6).toUpperCase() || '-'}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
@@ -472,7 +500,7 @@ export default function AdminGenerusPage() {
                     value={formData.kelas}
                     onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
-              >
+                  >
                     <option value="Pra Remaja">Pra Remaja</option>
                     <option value="Remaja">Remaja</option>
                     <option value="Pra Nikah">Pra Nikah</option>
