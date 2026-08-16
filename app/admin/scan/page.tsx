@@ -109,7 +109,7 @@ export default function AdminScanPage() {
     const { data: gen, error } = await supabase
       .from('generus')
       .select('id, nama')
-      .or(`id.eq.${cleanCode},qr_code_id.eq.${cleanCode},qr_code.eq.${cleanCode}`)
+      .or(`qr_code_id.eq.${cleanCode},id.eq.${cleanCode}`)
       .maybeSingle()
 
     if (error || !gen) {
