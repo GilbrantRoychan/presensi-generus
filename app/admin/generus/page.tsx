@@ -448,8 +448,8 @@ export default function AdminGenerusPage() {
                 >
                   <option value="Gonjen 1">Gonjen 1</option>  
                   <option value="Gonjen 2">Gonjen 2</option>
-                  <option value="Gonjen 3">Kembaran</option>
-                  <option value="Gonjen 4">Sembung</option>
+                  <option value="Kembaran">Kembaran</option>
+                  <option value="Sembung">Sembung</option>
                 </select>
               </div>
 
