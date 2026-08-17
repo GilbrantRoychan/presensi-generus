@@ -70,7 +70,7 @@ export default function AdminScanPage() {
     const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
     if (data && data.length > 0) {
       setAcaraList(data)
-      setSelectedAcara(data[0].id) // Default acara paling awal
+      setSelectedAcara(data[0].id)
     }
   }
 
@@ -92,7 +92,7 @@ export default function AdminScanPage() {
     setKelasBaru('Pra Remaja')
   }
 
-  // 1. Logika Pemrosesan QR Code (Fixed: Mencari ID / QR Code ID)
+  // 1. Logika Pemrosesan QR Code (FIXED & IMPROVED)
   const handleProcessPresensiByQR = async (rawCode: string) => {
     if (isProcessing.current) return
     isProcessing.current = true
@@ -103,16 +103,32 @@ export default function AdminScanPage() {
       return
     }
 
-    const cleanCode = rawCode.trim()
+    // A. Bersihkan spasi / karakter enter tersembunyi
+    let cleanCode = rawCode.trim()
 
-    // Cari berdasarkan ID (UUID) ATAU qr_code_id / qr_code
+    // B. Cek jika isi QR Code adalah objek JSON (misal: {"id":"123", "nama":"Ahmad"})
+    if (cleanCode.startsWith('{') && cleanCode.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(cleanCode)
+        cleanCode = parsed.qr_code_id || parsed.id || cleanCode
+      } catch (e) {
+        // Jika gagal parse, gunakan string asli
+      }
+    }
+
+    console.log("Mencari data generus untuk QR Code:", cleanCode)
+
+    // C. Pencarian Fleksibel (Mencari ID, qr_code_id, atau kode_qr dengan Case-Insensitive / ilike)
     const { data: gen, error } = await supabase
       .from('generus')
       .select('id, nama')
-      .or(`qr_code_id.eq.${cleanCode},id.eq.${cleanCode}`)
+      .or(`qr_code_id.ilike.${cleanCode},id.ilike.${cleanCode}`)
       .maybeSingle()
 
-    if (error || !gen) {
+    if (error) {
+      console.error("Supabase Error:", error.message)
+      showToast(`Error Database: ${error.message}`, 'error')
+    } else if (!gen) {
       showToast(`Kode QR (${cleanCode}) tidak ditemukan!`, 'error')
     } else {
       await submitPresensi(gen.id, gen.nama, 'QR Scan')
@@ -126,7 +142,6 @@ export default function AdminScanPage() {
 
   // 2. Submit Presensi
   const submitPresensi = async (generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') => {
-    // Cek apakah sudah absen di acara ini
     const { data: existing } = await supabase
       .from('presensi')
       .select('id')
@@ -151,7 +166,7 @@ export default function AdminScanPage() {
       showToast(`Gagal mencatat presensi: ${error.message}`, 'error')
     } else {
       showToast(`Berhasil! ${nama} tercatat Hadir (${metode}).`, 'success')
-      resetForm() // Reset kolom input setelah berhasil
+      resetForm()
     }
   }
 
