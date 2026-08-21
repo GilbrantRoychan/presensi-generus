@@ -84,13 +84,15 @@ export default function AdminScanPage() {
     if (data) setGenerusList(data)
   }
 
-  // Options kelompok dinamis
+  // Ambil daftar unik kelompok secara otomatis dari data generus
   const kelompokOptions = Array.from(new Set(generusList.map((g) => g.kelompok))).filter(Boolean)
 
+  // Filter daftar generus berdasarkan kelompok yang dipilih
   const filteredGenerusList = selectedKelompokFilter
     ? generusList.filter((g) => g.kelompok === selectedKelompokFilter)
     : generusList
 
+  // Reset Semua Form Input Manual
   const resetForm = () => {
     setSelectedGenerusId('')
     setNamaBaru('')
@@ -99,7 +101,7 @@ export default function AdminScanPage() {
     setKelasBaru('Pra Remaja')
   }
 
-  // LOGIKA SCANNER SOLUTIF (KAMERA & FILE PROCESSED UNIFORM)
+  // Logika Pemrosesan QR Code
   const handleProcessPresensiByQR = async (rawCode: string) => {
     if (isProcessing.current) return
     isProcessing.current = true
@@ -110,41 +112,26 @@ export default function AdminScanPage() {
       return
     }
 
-    // 1. Bersihkan string dari karakter spasi / newlines tak terlihat
-    let cleanCode = rawCode.trim().replace(/^[\uFEFF\xA0]+|[\uFEFF\xA0]+$/g, '')
+    const cleanCode = rawCode.trim()
 
-    // 2. Ekstrak data jika QR Code berisi format JSON
-    if (cleanCode.startsWith('{') && cleanCode.endsWith('}')) {
-      try {
-        const parsed = JSON.parse(cleanCode)
-        cleanCode = parsed.qr_code_id || parsed.id || parsed.code || cleanCode
-      } catch (e) {
-        // Abaikan error parse jika bukan format JSON sah
-      }
-    }
-
-    // 3. Pencarian Fleksibel (Case-Insensitive & Multi-kolom)
     const { data: gen, error } = await supabase
       .from('generus')
       .select('id, nama')
-      .or(`qr_code_id.ilike.${cleanCode},id.ilike.${cleanCode}`)
+      .or(`qr_code_id.eq.${cleanCode},id.eq.${cleanCode}`)
       .maybeSingle()
 
-    if (error) {
-      showToast(`Database Error: ${error.message}`, 'error')
-    } else if (!gen) {
-      showToast(`Kode QR (${cleanCode}) tidak ditemukan di database!`, 'error')
+    if (error || !gen) {
+      showToast(`Kode QR (${cleanCode}) tidak ditemukan!`, 'error')
     } else {
       await submitPresensi(gen.id, gen.nama, 'QR Scan')
     }
 
-    // Debounce cooldown scanner kamera
     setTimeout(() => {
       isProcessing.current = false
     }, 2500)
   }
 
-  // Submit Presensi ke Supabase
+  // Submit Presensi
   const submitPresensi = async (generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') => {
     const { data: existing } = await supabase
       .from('presensi')
@@ -174,6 +161,7 @@ export default function AdminScanPage() {
     }
   }
 
+  // Submit Manual Data Ada
   const handleManualAdaSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedAcara || !selectedGenerusId) return
@@ -181,6 +169,7 @@ export default function AdminScanPage() {
     if (gen) await submitPresensi(gen.id, gen.nama, 'Manual Admin')
   }
 
+  // Submit Manual Data Baru
   const handleManualBaruSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedAcara) return
@@ -309,7 +298,7 @@ export default function AdminScanPage() {
                   value={selectedKelompokFilter}
                   onChange={(e) => {
                     setSelectedKelompokFilter(e.target.value)
-                    setSelectedGenerusId('')
+                    setSelectedGenerusId('') // Reset pilihan nama jika kelompok berganti
                   }}
                   className="w-full p-2.5 border rounded-lg text-xs sm:text-sm bg-gray-50 focus:bg-white outline-none"
                   disabled={!selectedAcara}
@@ -323,7 +312,7 @@ export default function AdminScanPage() {
                 </select>
               </div>
 
-              {/* Dropdown Pilih Nama */}
+              {/* Dropdown Pilih Nama (Tersaring berdasarkan kelompok) */}
               <div>
                 <label className="block text-sm font-medium mb-1 text-slate-700">Cari Nama Generus</label>
                 <select
