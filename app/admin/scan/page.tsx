@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Html5QrcodeScanner } from 'html5-qrcode'
-import { Camera, UserCheck, UserPlus, Calendar, CheckCircle2, AlertCircle, X } from 'lucide-react'
+import { Camera, UserCheck, UserPlus, Calendar, CheckCircle2, AlertCircle, X, Filter } from 'lucide-react'
 
 export default function AdminScanPage() {
   const supabase = createClient()
@@ -13,6 +13,7 @@ export default function AdminScanPage() {
   const [activeTab, setActiveTab] = useState<'ada' | 'baru'>('ada')
   
   // State Input Manual Data Ada
+  const [selectedKelompokFilter, setSelectedKelompokFilter] = useState<string>('')
   const [selectedGenerusId, setSelectedGenerusId] = useState<string>('')
 
   // State Form Generus Baru
@@ -70,7 +71,7 @@ export default function AdminScanPage() {
     const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
     if (data && data.length > 0) {
       setAcaraList(data)
-      setSelectedAcara(data[0].id) // Default acara paling awal
+      setSelectedAcara(data[0].id)
     }
   }
 
@@ -83,6 +84,14 @@ export default function AdminScanPage() {
     if (data) setGenerusList(data)
   }
 
+  // Ambil daftar unik kelompok secara otomatis dari data generus
+  const kelompokOptions = Array.from(new Set(generusList.map((g) => g.kelompok))).filter(Boolean)
+
+  // Filter daftar generus berdasarkan kelompok yang dipilih
+  const filteredGenerusList = selectedKelompokFilter
+    ? generusList.filter((g) => g.kelompok === selectedKelompokFilter)
+    : generusList
+
   // Reset Semua Form Input Manual
   const resetForm = () => {
     setSelectedGenerusId('')
@@ -92,7 +101,7 @@ export default function AdminScanPage() {
     setKelasBaru('Pra Remaja')
   }
 
-  // 1. Logika Pemrosesan QR Code (Fixed: Mencari ID / QR Code ID)
+  // Logika Pemrosesan QR Code
   const handleProcessPresensiByQR = async (rawCode: string) => {
     if (isProcessing.current) return
     isProcessing.current = true
@@ -105,7 +114,6 @@ export default function AdminScanPage() {
 
     const cleanCode = rawCode.trim()
 
-    // Cari berdasarkan ID (UUID) ATAU qr_code_id / qr_code
     const { data: gen, error } = await supabase
       .from('generus')
       .select('id, nama')
@@ -118,15 +126,13 @@ export default function AdminScanPage() {
       await submitPresensi(gen.id, gen.nama, 'QR Scan')
     }
 
-    // Cooldown 2.5 detik agar kamera tidak me-rescan berulang-ulang
     setTimeout(() => {
       isProcessing.current = false
     }, 2500)
   }
 
-  // 2. Submit Presensi
+  // Submit Presensi
   const submitPresensi = async (generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') => {
-    // Cek apakah sudah absen di acara ini
     const { data: existing } = await supabase
       .from('presensi')
       .select('id')
@@ -151,7 +157,7 @@ export default function AdminScanPage() {
       showToast(`Gagal mencatat presensi: ${error.message}`, 'error')
     } else {
       showToast(`Berhasil! ${nama} tercatat Hadir (${metode}).`, 'success')
-      resetForm() // Reset kolom input setelah berhasil
+      resetForm()
     }
   }
 
@@ -282,6 +288,31 @@ export default function AdminScanPage() {
           {/* Tab 1: Data Ada */}
           {activeTab === 'ada' && (
             <form onSubmit={handleManualAdaSubmit} className="space-y-4">
+              
+              {/* Filter Pilih Kelompok */}
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium mb-1 text-slate-700">
+                  <Filter className="w-3.5 h-3.5 text-blue-600" /> Filter Kelompok
+                </label>
+                <select
+                  value={selectedKelompokFilter}
+                  onChange={(e) => {
+                    setSelectedKelompokFilter(e.target.value)
+                    setSelectedGenerusId('') // Reset pilihan nama jika kelompok berganti
+                  }}
+                  className="w-full p-2.5 border rounded-lg text-xs sm:text-sm bg-gray-50 focus:bg-white outline-none"
+                  disabled={!selectedAcara}
+                >
+                  <option value="">-- Semua Kelompok --</option>
+                  {kelompokOptions.map((kel) => (
+                    <option key={kel} value={kel}>
+                      {kel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Dropdown Pilih Nama (Tersaring berdasarkan kelompok) */}
               <div>
                 <label className="block text-sm font-medium mb-1 text-slate-700">Cari Nama Generus</label>
                 <select
@@ -291,13 +322,14 @@ export default function AdminScanPage() {
                   disabled={!selectedAcara}
                 >
                   <option value="">-- Pilih Generus --</option>
-                  {generusList.map((g) => (
+                  {filteredGenerusList.map((g) => (
                     <option key={g.id} value={g.id}>
-                      {g.kelompok} - {g.nama} ({g.jenis_kelamin}, {g.kelas})
+                      {g.nama} ({g.kelompok} - {g.jenis_kelamin}, {g.kelas})
                     </option>
                   ))}
                 </select>
               </div>
+
               <button
                 type="submit"
                 disabled={!selectedAcara || !selectedGenerusId}
