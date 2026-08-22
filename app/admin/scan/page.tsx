@@ -101,6 +101,33 @@ export default function AdminScanPage() {
     setKelasBaru('Pra Remaja')
   }
 
+  const getQrCandidates = (rawCode: string) => {
+    const code = rawCode.replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
+    const compactCode = code.replace(/\s+/g, '')
+    const candidates = new Set([code, compactCode, compactCode.toUpperCase()])
+
+    try {
+      const url = new URL(code)
+      url.searchParams.forEach((value, key) => {
+        if (['id', 'qr', 'qr_code', 'qr_code_id'].includes(key.toLowerCase())) {
+          candidates.add(value.trim())
+        }
+      })
+      candidates.add(url.pathname.split('/').filter(Boolean).pop() || '')
+    } catch {
+      try {
+        const parsed = JSON.parse(code)
+        ;['id', 'qr', 'qr_code', 'qr_code_id'].forEach((key) => {
+          if (typeof parsed?.[key] === 'string') candidates.add(parsed[key].trim())
+        })
+      } catch {
+        // Payload bukan URL atau JSON, gunakan teks mentah.
+      }
+    }
+
+    return Array.from(candidates).filter(Boolean)
+  }
+
   // Logika Pemrosesan QR Code
   const handleProcessPresensiByQR = async (rawCode: string) => {
     if (isProcessing.current) return
@@ -112,16 +139,40 @@ export default function AdminScanPage() {
       return
     }
 
-    const cleanCode = rawCode.trim()
+    const candidates = getQrCandidates(rawCode)
+    let gen: { id: string; nama: string } | null = null
+    let lookupError: { message: string } | null = null
 
-    const { data: gen, error } = await supabase
-      .from('generus')
-      .select('id, nama')
-      .or(`qr_code_id.eq.${cleanCode},id.eq.${cleanCode}`)
-      .maybeSingle()
+    for (const candidate of candidates) {
+      const qrResult = await supabase
+        .from('generus')
+        .select('id, nama')
+        .eq('qr_code_id', candidate)
+        .maybeSingle()
 
-    if (error || !gen) {
-      showToast(`Kode QR (${cleanCode}) tidak ditemukan!`, 'error')
+      if (qrResult.error) lookupError = qrResult.error
+      if (qrResult.data) {
+        gen = qrResult.data
+        break
+      }
+
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate)) {
+        const idResult = await supabase
+          .from('generus')
+          .select('id, nama')
+          .eq('id', candidate)
+          .maybeSingle()
+
+        if (idResult.error) lookupError = idResult.error
+        if (idResult.data) {
+          gen = idResult.data
+          break
+        }
+      }
+    }
+
+    if (lookupError || !gen) {
+      showToast(`Kode QR (${candidates[0] || rawCode.trim()}) tidak ditemukan!`, 'error')
     } else {
       await submitPresensi(gen.id, gen.nama, 'QR Scan')
     }

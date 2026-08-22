@@ -17,8 +17,9 @@ interface Generus {
   jenis_kelamin?: string
 }
 
+const supabase = createClient()
+
 export default function QRCodePage() {
-  const supabase = createClient()
   const [generusList, setGenerusList] = useState<Generus[]>([])
   const [activeKelompok, setActiveKelompok] = useState<string>('Semua')
   const [searchQuery, setSearchQuery] = useState('')
@@ -29,22 +30,22 @@ export default function QRCodePage() {
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   useEffect(() => {
-    fetchGenerus()
-  }, [])
+    const loadGenerus = async () => {
+      setLoading(true)
+      const { data } = await supabase
+        .from('generus')
+        .select('*')
+        .order('kelompok', { ascending: true })
+        .order('nama', { ascending: true })
 
-  const fetchGenerus = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('generus')
-      .select('*')
-      .order('kelompok', { ascending: true })
-      .order('nama', { ascending: true })
-
-    if (data) {
-      setGenerusList(data as Generus[])
+      if (data) {
+        setGenerusList(data as Generus[])
+      }
+      setLoading(false)
     }
-    setLoading(false)
-  }
+
+    loadGenerus()
+  }, [])
 
   const kelompokList = Array.from(new Set(generusList.map((g: Generus) => g.kelompok || 'Lainnya'))).sort()
 
@@ -90,6 +91,7 @@ export default function QRCodePage() {
     setDownloadingZip(true)
     const zip = new JSZip()
     const folder = zip.folder(`QRCode_Kelompok_${kelompokName.replace(/[^a-zA-Z0-9]/g, '_')}`)
+    let downloadedCount = 0
 
     try {
       for (const g of targetItems) {
@@ -102,14 +104,21 @@ export default function QRCodePage() {
           const base64Data = dataUrl.replace(/^data:image\/(png|jpeg);base64,/, '')
           const safeNama = g.nama.replace(/[^a-zA-Z0-9]/g, '_')
           folder?.file(`${safeNama}_${g.id}.${downloadFormat}`, base64Data, { base64: true })
+          downloadedCount += 1
         }
       }
 
+      if (downloadedCount === 0) {
+        throw new Error('Tidak ada kartu QR Code yang berhasil dibuat.')
+      }
+
       const content = await zip.generateAsync({ type: 'blob' })
+      const objectUrl = URL.createObjectURL(content)
       const link = document.createElement('a')
-      link.href = URL.createObjectURL(content)
+      link.href = objectUrl
       link.download = `QR_Kelompok_${kelompokName.replace(/[^a-zA-Z0-9]/g, '_')}_${downloadFormat.toUpperCase()}.zip`
       link.click()
+      URL.revokeObjectURL(objectUrl)
     } catch (err) {
       console.error('Gagal membuat ZIP:', err)
       alert('Terjadi kesalahan saat mengunduh file ZIP.')
@@ -240,7 +249,7 @@ export default function QRCodePage() {
                     {/* Menggunakan Tailwind v4 `w-55` (sebanding dengan 220px) */}
                     <div
                       ref={(el) => {
-                        cardRefs.current[g.qr_code_id || g.id] = el
+                        cardRefs.current[g.id] = el
                       }}
                       className="w-55 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center text-center space-y-3"
                     >
