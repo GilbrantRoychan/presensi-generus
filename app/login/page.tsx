@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { LogIn, Lock, User } from 'lucide-react'
+import { ArrowLeft, LogIn, Lock } from 'lucide-react'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -36,13 +37,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-md p-8 border border-gray-100">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 pt-13 pb-8 sm:px-6 sm:pt-13 sm:pb-12 lg:pt-13 lg:pb-6">
+      <div className="w-full max-w-md mb-4">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-blue-600 transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
+        </Link>
+      </div>
+
+      <div className="w-full max-w-md bg-white rounded-xl shadow-md p-6 sm:p-8 border border-gray-100">
         <div className="text-center mb-6">
           <div className="inline-flex p-3 bg-blue-50 text-blue-600 rounded-full mb-2">
             <Lock className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Login Admin Presensi</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Login Admin Presensi</h1>
           <p className="text-sm text-gray-500">Masuk untuk mengelola presensi generus</p>
         </div>
 

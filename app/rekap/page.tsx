@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Search, Download, Printer } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Search, Download, Printer } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 export default function RekapPage() {
@@ -140,7 +141,8 @@ export default function RekapPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
+    <div className="min-h-screen bg-slate-900">
+      <div className="max-w-6xl mx-auto px-3 pt-13 pb-4 sm:px-4 sm:pt-13 sm:pb-4 lg:px-4 lg:pt-13 lg:pb-4 space-y-4 sm:space-y-6">
       {/* CSS Khusus Format Cetak PDF */}
       <style jsx global>{`
         @media print {
@@ -163,7 +165,16 @@ export default function RekapPage() {
       `}</style>
 
       {/* Control Panel (Sembunyikan saat di-print) */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 no-print">
+      <div className="no-print">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
+        </Link>
+      </div>
+
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 no-print">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Rekap Presensi Viewer</h1>
@@ -174,7 +185,7 @@ export default function RekapPage() {
 
           {/* Tombol Ekspor & Cetak */}
           {selectedAcara && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleExportExcel}
                 className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 cursor-pointer"
@@ -348,6 +359,7 @@ export default function RekapPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

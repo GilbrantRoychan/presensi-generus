@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 import { QRCodeSVG } from 'qrcode.react'
 import { toPng, toJpeg } from 'html-to-image'
 import JSZip from 'jszip'
-import { Search, Download, Folder, Users, Image as ImageIcon, Sparkles } from 'lucide-react'
+import { ArrowLeft, Search, Download, Folder, Users, Image as ImageIcon, Sparkles } from 'lucide-react'
 
 // Interface untuk data Generus
 interface Generus {
@@ -128,11 +129,19 @@ export default function QRCodePage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="min-h-screen bg-slate-900">
+      <div className="max-w-7xl mx-auto px-3 pt-13 pb-4 sm:px-4 sm:pt-13 sm:pb-6 lg:px-6 lg:pt-13 lg:pb-6 space-y-4 sm:space-y-6">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
+        </Link>
+
+        <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-blue-600" /> Generasi QR Code Co-Card
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-start sm:items-center gap-2">
+            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-blue-600" /> Generasi QR Code Co-Card
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
             Unduh QR Code siap pakai atau cetak langsung untuk ditempel pada ID Card / Co-Card fisik peserta.
@@ -164,16 +173,16 @@ export default function QRCodePage() {
             JPG
           </button>
         </div>
-      </div>
+        </div>
 
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none ">
+        <div className="space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-700 bg-slate-800/80 p-2 pb-3 scrollbar-none">
           <button
             onClick={() => setActiveKelompok('Semua')}
             className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
               activeKelompok === 'Semua'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
+                ? 'bg-blue-600 text-white border border-blue-400'
+                : 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
             }`}
           >
             <Users className="w-4 h-4" /> Semua Kelompok ({generusList.length})
@@ -187,8 +196,8 @@ export default function QRCodePage() {
                 onClick={() => setActiveKelompok(kel)}
                 className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
                   activeKelompok === kel
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                    : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
+                    ? 'bg-blue-600 text-white border border-blue-400'
+                    : 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
                 }`}
               >
                 <Folder className="w-4 h-4 text-amber-500" /> {kel} ({count})
@@ -207,9 +216,9 @@ export default function QRCodePage() {
             className="w-full pl-9 pr-3 py-2 border rounded-lg text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-      </div>
+        </div>
 
-      {loading ? (
+        {loading ? (
         <div className="bg-white p-12 text-center rounded-2xl text-gray-400 text-sm">
           Memuat data QR Code...
         </div>
@@ -220,7 +229,7 @@ export default function QRCodePage() {
       ) : (
         <div className="space-y-8">
           {Object.entries(groupedGenerus).map(([kelompokName, items]: [string, Generus[]]) => (
-            <div key={kelompokName} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+            <div key={kelompokName} className="bg-blue-50 p-4 sm:p-6 rounded-2xl shadow-sm border border-blue-100 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
                 <div className="flex items-center gap-2.5">
                   <span className="w-3 h-8 bg-blue-600 rounded-full"></span>
@@ -244,14 +253,14 @@ export default function QRCodePage() {
                 {items.map((g: Generus) => (
                   <div
                     key={g.id}
-                    className="flex flex-col items-center bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-4 hover:shadow-md transition"
+                    className="flex flex-col items-center bg-blue-100/70 p-4 rounded-xl border border-blue-200 space-y-4 transition"
                   >
                     {/* Menggunakan Tailwind v4 `w-55` (sebanding dengan 220px) */}
                     <div
                       ref={(el) => {
                         cardRefs.current[g.id] = el
                       }}
-                      className="w-55 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center text-center space-y-3"
+                      className="w-full max-w-55 bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center text-center space-y-3"
                     >
                       <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-extrabold uppercase tracking-widest border border-blue-100">
                         {g.kelompok || 'GENERUS'}
@@ -292,7 +301,8 @@ export default function QRCodePage() {
             </div>
           ))}
         </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
