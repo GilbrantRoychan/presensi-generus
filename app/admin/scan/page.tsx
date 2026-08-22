@@ -2,15 +2,35 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Html5QrcodeScanner } from 'html5-qrcode'
-import { Camera, UserCheck, UserPlus, Calendar, CheckCircle2, AlertCircle, X, Filter } from 'lucide-react'
+import { Html5Qrcode } from 'html5-qrcode'
+import { Camera, UserCheck, UserPlus, Calendar, CheckCircle2, AlertCircle, X, Filter, Image as ImageIcon } from 'lucide-react'
+
+const supabase = createClient()
+
+interface Acara {
+  id: string
+  nama_acara: string
+  tanggal: string
+  lokasi: string
+}
+
+interface Generus {
+  id: string
+  nama: string
+  kelompok: string
+  jenis_kelamin: 'Laki-laki' | 'Perempuan'
+  kelas: string
+  qr_code_id?: string
+}
 
 export default function AdminScanPage() {
-  const supabase = createClient()
-  const [acaraList, setAcaraList] = useState<any[]>([])
+  const [acaraList, setAcaraList] = useState<Acara[]>([])
   const [selectedAcara, setSelectedAcara] = useState<string>('')
-  const [generusList, setGenerusList] = useState<any[]>([])
+  const [generusList, setGenerusList] = useState<Generus[]>([])
   const [activeTab, setActiveTab] = useState<'ada' | 'baru'>('ada')
+  const [cameraError, setCameraError] = useState('')
+  const [scanningImage, setScanningImage] = useState(false)
+  const [requestingCamera, setRequestingCamera] = useState(false)
   
   // State Input Manual Data Ada
   const [selectedKelompokFilter, setSelectedKelompokFilter] = useState<string>('')
@@ -31,10 +51,16 @@ export default function AdminScanPage() {
 
   // Ref penanda cegah pindaian berulang beruntun (Debounce)
   const isProcessing = useRef(false)
+  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const startScannerRef = useRef<(() => Promise<void>) | null>(null)
+  const processPresensiRef = useRef<((rawCode: string) => Promise<void>) | null>(null)
 
   useEffect(() => {
-    fetchAcara()
-    fetchGenerus()
+    const loadData = async () => {
+      await Promise.all([fetchAcara(), fetchGenerus()])
+    }
+
+    loadData()
   }, [])
 
   // Fungsi Tampil Toast Notification Singkat
@@ -49,25 +75,52 @@ export default function AdminScanPage() {
   useEffect(() => {
     if (!selectedAcara) return
 
-    const scanner = new Html5QrcodeScanner(
-      'reader',
-      { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
-      false
-    )
+    let cancelled = false
+    const scanner = new Html5Qrcode('reader')
+    scannerRef.current = scanner
+    const startScanner = async () => {
+      try {
+        const cameras = await Html5Qrcode.getCameras()
+        if (cameras.length === 0) {
+          throw new Error('Kamera tidak ditemukan pada perangkat ini.')
+        }
 
-    scanner.render(
-      async (decodedText) => {
-        await handleProcessPresensiByQR(decodedText)
-      },
-      () => {}
-    )
+        const camera = cameras.find((item) => /back|rear|environment/i.test(item.label)) || cameras[0]
+        await scanner.start(
+          camera.id,
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          async (decodedText) => {
+            await processPresensiRef.current?.(decodedText)
+          },
+          () => {}
+        )
+      } catch (error) {
+        if (cancelled) return
+        const message = error instanceof Error ? error.message : 'Akses kamera gagal.'
+        setCameraError(
+          `${message} Untuk development, gunakan http://localhost atau HTTPS. HTTP melalui alamat IP/LAN diblokir browser.`
+        )
+      }
+    }
 
+    startScannerRef.current = startScanner
     return () => {
-      scanner.clear().catch(() => {})
+      cancelled = true
+      const stopScanner = async () => {
+        try {
+          if (scanner.isScanning) await scanner.stop()
+          await scanner.clear()
+        } catch {
+          // Scanner mungkin belum selesai diinisialisasi saat komponen dilepas.
+        }
+      }
+      stopScanner()
+      scannerRef.current = null
+      startScannerRef.current = null
     }
   }, [selectedAcara])
 
-  const fetchAcara = async () => {
+  async function fetchAcara() {
     const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
     if (data && data.length > 0) {
       setAcaraList(data)
@@ -75,7 +128,7 @@ export default function AdminScanPage() {
     }
   }
 
-  const fetchGenerus = async () => {
+  async function fetchGenerus() {
     const { data } = await supabase
       .from('generus')
       .select('*')
@@ -101,8 +154,35 @@ export default function AdminScanPage() {
     setKelasBaru('Pra Remaja')
   }
 
+  const getQrCandidates = (rawCode: string) => {
+    const code = rawCode.replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
+    const compactCode = code.replace(/\s+/g, '')
+    const candidates = new Set([code, compactCode, compactCode.toUpperCase()])
+
+    try {
+      const url = new URL(code)
+      url.searchParams.forEach((value, key) => {
+        if (['id', 'qr', 'qr_code', 'qr_code_id'].includes(key.toLowerCase())) {
+          candidates.add(value.trim())
+        }
+      })
+      candidates.add(url.pathname.split('/').filter(Boolean).pop() || '')
+    } catch {
+      try {
+        const parsed = JSON.parse(code)
+        ;['id', 'qr', 'qr_code', 'qr_code_id'].forEach((key) => {
+          if (typeof parsed?.[key] === 'string') candidates.add(parsed[key].trim())
+        })
+      } catch {
+        // Payload bukan URL atau JSON, gunakan teks mentah.
+      }
+    }
+
+    return Array.from(candidates).filter(Boolean)
+  }
+
   // Logika Pemrosesan QR Code
-  const handleProcessPresensiByQR = async (rawCode: string) => {
+  async function handleProcessPresensiByQR(rawCode: string) {
     if (isProcessing.current) return
     isProcessing.current = true
 
@@ -112,16 +192,40 @@ export default function AdminScanPage() {
       return
     }
 
-    const cleanCode = rawCode.trim()
+    const candidates = getQrCandidates(rawCode)
+    let gen: { id: string; nama: string } | null = null
+    let lookupError: { message: string } | null = null
 
-    const { data: gen, error } = await supabase
-      .from('generus')
-      .select('id, nama')
-      .or(`qr_code_id.eq.${cleanCode},id.eq.${cleanCode}`)
-      .maybeSingle()
+    for (const candidate of candidates) {
+      const qrResult = await supabase
+        .from('generus')
+        .select('id, nama')
+        .eq('qr_code_id', candidate)
+        .maybeSingle()
 
-    if (error || !gen) {
-      showToast(`Kode QR (${cleanCode}) tidak ditemukan!`, 'error')
+      if (qrResult.error) lookupError = qrResult.error
+      if (qrResult.data) {
+        gen = qrResult.data
+        break
+      }
+
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate)) {
+        const idResult = await supabase
+          .from('generus')
+          .select('id, nama')
+          .eq('id', candidate)
+          .maybeSingle()
+
+        if (idResult.error) lookupError = idResult.error
+        if (idResult.data) {
+          gen = idResult.data
+          break
+        }
+      }
+    }
+
+    if (lookupError || !gen) {
+      showToast(`Kode QR (${candidates[0] || rawCode.trim()}) tidak ditemukan!`, 'error')
     } else {
       await submitPresensi(gen.id, gen.nama, 'QR Scan')
     }
@@ -131,8 +235,61 @@ export default function AdminScanPage() {
     }, 2500)
   }
 
+  processPresensiRef.current = handleProcessPresensiByQR
+
+  const handleImageScan = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const imageFile = event.target.files?.[0]
+    event.target.value = ''
+    if (!imageFile || !scannerRef.current) return
+
+    setScanningImage(true)
+    setCameraError('')
+
+    try {
+      const scanner = scannerRef.current
+      if (scanner.isScanning) await scanner.stop()
+      const decodedText = await scanner.scanFile(imageFile, true)
+      await handleProcessPresensiByQR(decodedText)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'QR Code tidak ditemukan pada gambar.'
+      setCameraError(`Gagal membaca gambar: ${message}`)
+    } finally {
+      setScanningImage(false)
+      await startScannerRef.current?.()
+    }
+  }
+
+  const requestCameraAccess = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Browser atau perangkat ini tidak mendukung akses kamera.')
+      return
+    }
+
+    setRequestingCamera(true)
+    setCameraError('')
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      stream.getTracks().forEach((track) => track.stop())
+      if (!scannerRef.current?.isScanning) {
+        await startScannerRef.current?.()
+      }
+    } catch (error) {
+      const message = error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Izin kamera ditolak. Buka pengaturan situs/browser lalu izinkan kamera.'
+        : error instanceof Error
+          ? error.message
+          : 'Akses kamera gagal.'
+      setCameraError(
+        `${message} Untuk development, gunakan http://localhost atau HTTPS. HTTP melalui alamat IP/LAN diblokir browser.`
+      )
+    } finally {
+      setRequestingCamera(false)
+    }
+  }
+
   // Submit Presensi
-  const submitPresensi = async (generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') => {
+  async function submitPresensi(generusId: string, nama: string, metode: 'QR Scan' | 'Manual Admin') {
     const { data: existing } = await supabase
       .from('presensi')
       .select('id')
@@ -257,7 +414,34 @@ export default function AdminScanPage() {
               Pilih acara di atas untuk mengaktifkan scanner kamera.
             </div>
           ) : (
-            <div id="reader" className="w-full"></div>
+            <>
+              <div id="reader" className="w-full"></div>
+              <button
+                type="button"
+                onClick={requestCameraAccess}
+                disabled={requestingCamera || scanningImage}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                <Camera className="h-4 w-4" />
+                {requestingCamera ? 'Meminta akses kamera...' : 'Izinkan Akses Kamera'}
+              </button>
+              <label className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
+                <ImageIcon className="h-4 w-4" />
+                {scanningImage ? 'Membaca gambar...' : 'Scan QR dari Gambar'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageScan}
+                  disabled={scanningImage}
+                  className="sr-only"
+                />
+              </label>
+              {cameraError && (
+                <p className="mt-4 rounded-lg bg-red-50 p-3 text-center text-xs text-red-700">
+                  {cameraError}
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -374,7 +558,7 @@ export default function AdminScanPage() {
                   <label className="block font-medium text-slate-700 mb-1">Jenis Kelamin</label>
                   <select
                     value={jkBaru}
-                    onChange={(e) => setJkBaru(e.target.value as any)}
+                    onChange={(e) => setJkBaru(e.target.value as 'Laki-laki' | 'Perempuan')}
                     className="w-full p-2.5 border rounded-lg outline-none bg-white"
                   >
                     <option value="Laki-laki">Laki-laki</option>
