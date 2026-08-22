@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Search, Download, Printer } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowLeft, Search, Download, Printer } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 export default function RekapPage() {
@@ -140,7 +141,8 @@ export default function RekapPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
+    <div className="min-h-screen bg-slate-900">
+      <div className="max-w-6xl mx-auto px-3 pt-13 pb-4 sm:px-4 sm:pt-13 sm:pb-4 lg:px-4 lg:pt-13 lg:pb-4 space-y-4 sm:space-y-6">
       {/* CSS Khusus Format Cetak PDF */}
       <style jsx global>{`
         @media print {
@@ -163,7 +165,16 @@ export default function RekapPage() {
       `}</style>
 
       {/* Control Panel (Sembunyikan saat di-print) */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 no-print">
+      <div className="no-print">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition mb-4"
+        >
+          <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
+        </Link>
+      </div>
+
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 space-y-4 no-print">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Rekap Presensi Viewer</h1>
@@ -174,16 +185,16 @@ export default function RekapPage() {
 
           {/* Tombol Ekspor & Cetak */}
           {selectedAcara && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleExportExcel}
-                className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2"
+                className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 cursor-pointer"
               >
                 <Download className="w-4 h-4" /> Export Excel
               </button>
               <button
                 onClick={handlePrintPDF}
-                className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-slate-900 transition flex items-center gap-2"
+                className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-slate-900 transition flex items-center gap-2 cursor-pointer"
               >
                 <Printer className="w-4 h-4" /> Cetak / PDF
               </button>
@@ -198,7 +209,7 @@ export default function RekapPage() {
             <select
               value={selectedAcara}
               onChange={(e) => setSelectedAcara(e.target.value)}
-              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium text-stone-800 cursor-pointer"
             >
               <option value="">-- Pilih Acara --</option>
               {acaraList.map((a) => (
@@ -214,7 +225,7 @@ export default function RekapPage() {
             <select
               value={selectedKelompok}
               onChange={(e) => setSelectedKelompok(e.target.value)}
-              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer"
             >
               <option value="Semua">Semua Kelompok</option>
               <option value="Gonjen 1">Gonjen 1</option>
@@ -229,7 +240,7 @@ export default function RekapPage() {
             <select
               value={selectedJK}
               onChange={(e) => setSelectedJK(e.target.value)}
-              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer"
             >
               <option value="Semua">Semua Jenis Kelamin</option>
               <option value="Laki-laki">Laki-laki</option>
@@ -281,8 +292,8 @@ export default function RekapPage() {
         )}
 
         {/* Input Pencarian (Sembunyi saat Cetak) */}
-        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative no-print">
-          <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400" />
+        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative no-print text-stone-800 ">
+          <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400 " />
           <input
             type="text"
             placeholder="Cari nama, kelas, atau kelompok..."
@@ -348,6 +359,7 @@ export default function RekapPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )
