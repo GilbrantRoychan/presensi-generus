@@ -177,13 +177,13 @@ export default function RekapPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleExportExcel}
-                className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2"
+                className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 cursor-pointer"
               >
                 <Download className="w-4 h-4" /> Export Excel
               </button>
               <button
                 onClick={handlePrintPDF}
-                className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-slate-900 transition flex items-center gap-2"
+                className="px-3.5 py-2 bg-slate-800 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-slate-900 transition flex items-center gap-2 cursor-pointer"
               >
                 <Printer className="w-4 h-4" /> Cetak / PDF
               </button>
@@ -198,7 +198,7 @@ export default function RekapPage() {
             <select
               value={selectedAcara}
               onChange={(e) => setSelectedAcara(e.target.value)}
-              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium text-stone-800 cursor-pointer"
             >
               <option value="">-- Pilih Acara --</option>
               {acaraList.map((a) => (
@@ -214,7 +214,7 @@ export default function RekapPage() {
             <select
               value={selectedKelompok}
               onChange={(e) => setSelectedKelompok(e.target.value)}
-              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer"
             >
               <option value="Semua">Semua Kelompok</option>
               <option value="Gonjen 1">Gonjen 1</option>
@@ -229,7 +229,7 @@ export default function RekapPage() {
             <select
               value={selectedJK}
               onChange={(e) => setSelectedJK(e.target.value)}
-              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer"
             >
               <option value="Semua">Semua Jenis Kelamin</option>
               <option value="Laki-laki">Laki-laki</option>
@@ -281,8 +281,8 @@ export default function RekapPage() {
         )}
 
         {/* Input Pencarian (Sembunyi saat Cetak) */}
-        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative no-print">
-          <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400" />
+        <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative no-print text-stone-800 ">
+          <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400 " />
           <input
             type="text"
             placeholder="Cari nama, kelas, atau kelompok..."

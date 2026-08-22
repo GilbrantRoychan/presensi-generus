@@ -61,7 +61,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-stone-800"
                 placeholder="Masukkan username (contoh: admin)"
               />
             </div>
@@ -74,7 +74,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-stone-800"
               placeholder="••••••••"
             />
           </div>

@@ -145,7 +145,7 @@ export default function QRCodePage() {
           </span>
           <button
             onClick={() => setDownloadFormat('png')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition ${
               downloadFormat === 'png'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-200'
@@ -155,7 +155,7 @@ export default function QRCodePage() {
           </button>
           <button
             onClick={() => setDownloadFormat('jpg')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition ${
               downloadFormat === 'jpg'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-gray-600 hover:bg-gray-200'
@@ -167,10 +167,10 @@ export default function QRCodePage() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none ">
           <button
             onClick={() => setActiveKelompok('Semua')}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
               activeKelompok === 'Semua'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
                 : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
@@ -185,7 +185,7 @@ export default function QRCodePage() {
               <button
                 key={kel}
                 onClick={() => setActiveKelompok(kel)}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 ${
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
                   activeKelompok === kel
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
                     : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
@@ -233,7 +233,7 @@ export default function QRCodePage() {
                 <button
                   onClick={() => downloadKelompokZip(kelompokName)}
                   disabled={downloadingZip}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 shadow-sm disabled:bg-gray-300"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 shadow-sm disabled:bg-gray-300 cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   {downloadingZip ? 'Proses ZIP...' : `Download Semua ${kelompokName} (.ZIP)`}
@@ -280,7 +280,7 @@ export default function QRCodePage() {
                     <div className="flex items-center gap-2 w-full max-w-55">
                       <button
                         onClick={() => downloadSingleCard(g.id, g.nama, downloadFormat)}
-                        className="w-full py-2 bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                        className="w-full py-2 bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Download {downloadFormat.toUpperCase()}
