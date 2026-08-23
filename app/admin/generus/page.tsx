@@ -37,13 +37,18 @@ const normalizeExcelKey = (key: unknown) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
 
+const toExcelText = (value: unknown, fallback = '') => {
+  if (value === null || value === undefined) return fallback
+  return String(value).replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
+}
+
 const normalizeJenisKelamin = (value: unknown) => {
-  const normalized = String(value ?? '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase()
+  const normalized = toExcelText(value).toLowerCase()
 
   if (/^(p|pr|perempuan|wanita|female|f)$/.test(normalized)) return 'Perempuan'
   if (/^(l|lk|laki[- ]?laki|pria|male|m)$/.test(normalized)) return 'Laki-laki'
 
-  return value ? String(value).trim() : 'Laki-laki'
+  return normalized ? toExcelText(value) : 'Laki-laki'
 }
 
 // Helper function untuk mengurutkan: Kelompok -> Nama
@@ -213,12 +218,24 @@ export default function AdminGenerusPage() {
         }
 
         // Format data agar sesuai kolom Supabase
-        const formattedData = parsedData.map((row) => ({
-          nama: row.nama || row.Nama || row['NAMA LENGKAP'] || '',
-          kelompok: row.kelompok || row.Kelompok || 'GONJEN 1',
-          jenis_kelamin: row.jenis_kelamin || row['Jenis Kelamin'] || row.JK || 'Laki-laki',
-          kelas: row.kelas || row.Kelas || row['Kelas / Tingkat'] || 'Pra Remaja'
-        })).filter(item => item.nama.trim() !== '')
+        const formattedData = parsedData.map((row) => {
+          const normalizedRow = Object.fromEntries(
+            Object.entries(row).map(([key, value]) => [normalizeExcelKey(key), value])
+          )
+          const nama = toExcelText(normalizedRow.nama || normalizedRow.namalengkap)
+          const jenisKelamin =
+            normalizedRow.jeniskelamin ||
+            normalizedRow.jeniskelaminlp ||
+            normalizedRow.jk ||
+            normalizedRow.gender
+
+          return {
+            nama,
+            kelompok: toExcelText(normalizedRow.kelompok, 'GONJEN 1'),
+            jenis_kelamin: normalizeJenisKelamin(jenisKelamin),
+            kelas: toExcelText(normalizedRow.kelas || normalizedRow.kelastingkat, 'Pra Remaja')
+          }
+        }).filter(item => item.nama !== '')
 
         const { error } = await supabase
           .from('generus')
