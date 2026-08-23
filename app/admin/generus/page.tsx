@@ -157,13 +157,13 @@ export default function AdminGenerusPage() {
     const templateData = [
       {
         nama: 'Contoh Nama Generus 1',
-        kelompok: 'Gonjen 1',
+        kelompok: 'GONJEN 1',
         jenis_kelamin: 'Laki-laki',
         kelas: 'Pra Remaja'
       },
       {
         nama: 'Contoh Nama Generus 2',
-        kelompok: 'Gonjen 2',
+        kelompok: 'GONJEN 2',
         jenis_kelamin: 'Perempuan',
         kelas: 'Remaja'
       }
@@ -199,7 +199,7 @@ export default function AdminGenerusPage() {
         // Format data agar sesuai kolom Supabase
         const formattedData = parsedData.map((row) => ({
           nama: row.nama || row.Nama || row['NAMA LENGKAP'] || '',
-          kelompok: row.kelompok || row.Kelompok || 'Gonjen 1',
+          kelompok: row.kelompok || row.Kelompok || 'GONJEN 1',
           jenis_kelamin: row.jenis_kelamin || row['Jenis Kelamin'] || row.JK || 'Laki-laki',
           kelas: row.kelas || row.Kelas || row['Kelas / Tingkat'] || 'Pra Remaja'
         })).filter(item => item.nama.trim() !== '')
@@ -230,7 +230,7 @@ export default function AdminGenerusPage() {
   // Helper Modal
   const openAddModal = () => {
     setEditingData(null)
-    setFormData({ nama: '', kelompok: 'Gonjen 1', jenis_kelamin: 'Laki-laki', kelas: 'Pra Remaja' })
+    setFormData({ nama: '', kelompok: 'GONJEN 1', jenis_kelamin: 'Laki-laki', kelas: 'Pra Remaja' })
     setIsModalOpen(true)
   }
 
@@ -238,7 +238,7 @@ export default function AdminGenerusPage() {
     setEditingData(item)
     setFormData({
       nama: item.nama,
-      kelompok: item.kelompok || 'Gonjen 1',
+      kelompok: item.kelompok || 'GONJEN 1',
       jenis_kelamin: item.jenis_kelamin || 'Laki-laki',
       kelas: item.kelas || 'Pra Remaja'
     })
@@ -474,10 +474,10 @@ export default function AdminGenerusPage() {
                   onChange={(e) => setFormData({ ...formData, kelompok: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="Gonjen 1">Gonjen 1</option>  
-                  <option value="Gonjen 2">Gonjen 2</option>
-                  <option value="Kembaran">Kembaran</option>
-                  <option value="Sembung">Sembung</option>
+                  <option value="GONJEN 1">GONJEN 1</option>  
+                  <option value="GONJEN 2">GONJEN 2</option>
+                  <option value="KEMBARAN">KEMBARAN</option>
+                  <option value="SEMBUNG">SEMBUNG</option>
                 </select>
               </div>
 
