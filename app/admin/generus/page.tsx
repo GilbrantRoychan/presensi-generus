@@ -30,6 +30,22 @@ interface Generus {
 // Urutan prioritas kelompok kustom
 const KELOMPOK_ORDER = ['Gonjen 1', 'Gonjen 2', 'Kembaran', 'Sembung']
 
+const normalizeExcelKey = (key: unknown) =>
+  String(key ?? '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
+const normalizeJenisKelamin = (value: unknown) => {
+  const normalized = String(value ?? '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase()
+
+  if (/^(p|pr|perempuan|wanita|female|f)$/.test(normalized)) return 'Perempuan'
+  if (/^(l|lk|laki[- ]?laki|pria|male|m)$/.test(normalized)) return 'Laki-laki'
+
+  return value ? String(value).trim() : 'Laki-laki'
+}
+
 // Helper function untuk mengurutkan: Kelompok -> Nama
 const sortGenerus = (data: Generus[]) => {
   return [...data].sort((a, b) => {
@@ -185,10 +201,10 @@ export default function AdminGenerusPage() {
     reader.onload = async (e) => {
       try {
         const buffer = e.target?.result
-        const workbook = XLSX.read(buffer, { type: 'binary' })
+        const workbook = XLSX.read(buffer, { type: 'array' })
         const sheetName = workbook.SheetNames[0]
         const sheet = workbook.Sheets[sheetName]
-        const parsedData: any[] = XLSX.utils.sheet_to_json(sheet)
+        const parsedData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
 
         if (parsedData.length === 0) {
           alert('File kosong atau format tidak sesuai!')
@@ -196,13 +212,25 @@ export default function AdminGenerusPage() {
           return
         }
 
-        // Format data agar sesuai kolom Supabase
-        const formattedData = parsedData.map((row) => ({
-          nama: row.nama || row.Nama || row['NAMA LENGKAP'] || '',
-          kelompok: row.kelompok || row.Kelompok || 'Gonjen 1',
-          jenis_kelamin: row.jenis_kelamin || row['Jenis Kelamin'] || row.JK || 'Laki-laki',
-          kelas: row.kelas || row.Kelas || row['Kelas / Tingkat'] || 'Pra Remaja'
-        })).filter(item => item.nama.trim() !== '')
+        // Format data agar sesuai kolom Supabase, termasuk variasi heading Excel.
+        const formattedData = parsedData.map((row) => {
+          const normalizedRow = Object.fromEntries(
+            Object.entries(row).map(([key, value]) => [normalizeExcelKey(key), value])
+          )
+          const nama = String(normalizedRow.nama || normalizedRow.namalengkap || '').trim()
+          const jenisKelamin =
+            normalizedRow.jeniskelamin ||
+            normalizedRow.jeniskelaminlp ||
+            normalizedRow.jk ||
+            normalizedRow.gender
+
+          return {
+            nama,
+            kelompok: String(normalizedRow.kelompok || 'Gonjen 1').trim(),
+            jenis_kelamin: normalizeJenisKelamin(jenisKelamin),
+            kelas: String(normalizedRow.kelas || normalizedRow.kelastingkat || 'Pra Remaja').trim()
+          }
+        }).filter(item => item.nama !== '')
 
         const { error } = await supabase
           .from('generus')
@@ -224,7 +252,7 @@ export default function AdminGenerusPage() {
       }
     }
 
-    reader.readAsBinaryString(importFile)
+    reader.readAsArrayBuffer(importFile)
   }
 
   // Helper Modal
