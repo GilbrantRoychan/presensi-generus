@@ -28,7 +28,7 @@ interface Generus {
 }
 
 // Urutan prioritas kelompok kustom
-const KELOMPOK_ORDER = ['Gonjen 1', 'Gonjen 2', 'Kembaran', 'Sembung']
+const KELOMPOK_ORDER = ['GONJEN 1', 'GONJEN 2', 'KEMBARAN', 'SEMBUNG']
 
 // Helper function untuk mengurutkan: Kelompok -> Nama
 const sortGenerus = (data: Generus[]) => {
@@ -71,9 +71,9 @@ export default function AdminGenerusPage() {
   const [editingData, setEditingData] = useState<Generus | null>(null)
   const [formData, setFormData] = useState<Generus>({
     nama: '',
-    kelompok: 'Gonjen 1',
-    jenis_kelamin: 'Laki-laki',
-    kelas: 'Pra Remaja'
+    kelompok: 'Pilih Kelompok',
+    jenis_kelamin: 'Pilih Jenis kelamin',
+    kelas: 'Pilih Kelas'
   })
 
   // State File Import
