@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import SessionTimeout from './session-timeout'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -28,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="id" className="h-full bg-slate-50">
       <body className={`${inter.className} h-full antialiased text-slate-900 bg-slate-50 selection:bg-blue-100 selection:text-blue-700`}>
+        <SessionTimeout />
         {children}
       </body>
     </html>
