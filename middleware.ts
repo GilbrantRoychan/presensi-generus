@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000
+const LAST_ACTIVITY_COOKIE = 'presensi_last_activity'
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: { headers: request.headers },
@@ -24,9 +27,11 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+  const lastActivity = Number(request.cookies.get(LAST_ACTIVITY_COOKIE)?.value)
+  const isIdle = !lastActivity || Date.now() - lastActivity >= IDLE_TIMEOUT_MS
+  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
 
-  // Memproteksi seluruh rute /admin
-  if (request.nextUrl.pathname.startsWith('/admin') && !user) {
+  if (isAdminRoute && (!user || isIdle)) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
