@@ -508,7 +508,7 @@ export default function AdminScanPage() {
                   <option value="">-- Pilih Generus --</option>
                   {filteredGenerusList.map((g) => (
                     <option key={g.id} value={g.id}>
-                      {g.nama} ({g.kelompok} - {g.jenis_kelamin}, {g.kelas})
+                      {g.nama}
                     </option>
                   ))}
                 </select>
