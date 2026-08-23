@@ -30,6 +30,22 @@ interface Generus {
 // Urutan prioritas kelompok kustom
 const KELOMPOK_ORDER = ['GONJEN 1', 'GONJEN 2', 'KEMBARAN', 'SEMBUNG']
 
+const normalizeExcelKey = (key: unknown) =>
+  String(key ?? '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
+const normalizeJenisKelamin = (value: unknown) => {
+  const normalized = String(value ?? '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().toLowerCase()
+
+  if (/^(p|pr|perempuan|wanita|female|f)$/.test(normalized)) return 'Perempuan'
+  if (/^(l|lk|laki[- ]?laki|pria|male|m)$/.test(normalized)) return 'Laki-laki'
+
+  return value ? String(value).trim() : 'Laki-laki'
+}
+
 // Helper function untuk mengurutkan: Kelompok -> Nama
 const sortGenerus = (data: Generus[]) => {
   return [...data].sort((a, b) => {
@@ -185,10 +201,10 @@ export default function AdminGenerusPage() {
     reader.onload = async (e) => {
       try {
         const buffer = e.target?.result
-        const workbook = XLSX.read(buffer, { type: 'binary' })
+        const workbook = XLSX.read(buffer, { type: 'array' })
         const sheetName = workbook.SheetNames[0]
         const sheet = workbook.Sheets[sheetName]
-        const parsedData: any[] = XLSX.utils.sheet_to_json(sheet)
+        const parsedData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
 
         if (parsedData.length === 0) {
           alert('File kosong atau format tidak sesuai!')
@@ -224,7 +240,7 @@ export default function AdminGenerusPage() {
       }
     }
 
-    reader.readAsBinaryString(importFile)
+    reader.readAsArrayBuffer(importFile)
   }
 
   // Helper Modal
