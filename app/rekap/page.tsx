@@ -305,7 +305,7 @@ export default function RekapPage() {
                 <span className="font-bold">Lokasi:</span> {selectedAcaraObj.lokasi || '-'}
               </div>
               <div>
-                <span className="font-bold">Koordinator:</span> {selectedAcaraObj.koordinator || '-'}
+                <span className="font-bold">Koordinator:</span> {selectedAcaraObj.koor || '-'}
               </div>
             </div>
           </div>
