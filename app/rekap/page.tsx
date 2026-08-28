@@ -17,6 +17,7 @@ export default function RekapPage() {
   // Filter State
   const [selectedKelompok, setSelectedKelompok] = useState<string>('Semua')
   const [selectedJK, setSelectedJK] = useState<string>('Semua')
+  const [selectedStatus, setSelectedStatus] = useState<string>('Semua') // <--- State Filter Status Baru
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -81,14 +82,18 @@ export default function RekapPage() {
     setLoading(false)
   }
 
-  // Filter Data
+  // Filter Data (Diperbarui dengan Filter Status)
   const filteredGenerus = generusList.filter((g) => {
+    const statusGenerus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
+    
     const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
     const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
+    const matchStatus = selectedStatus === 'Semua' || statusGenerus === selectedStatus
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchKelompok && matchJK && matchSearch
+
+    return matchKelompok && matchJK && matchStatus && matchSearch
   })
 
   // Hitung Statistik
@@ -203,7 +208,7 @@ export default function RekapPage() {
         </div>
 
         {/* Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
             <select
@@ -245,6 +250,21 @@ export default function RekapPage() {
               <option value="Semua">Semua Jenis Kelamin</option>
               <option value="Laki-laki">Laki-laki</option>
               <option value="Perempuan">Perempuan</option>
+            </select>
+          </div>
+
+          {/* Filter Status Kehadiran Baru */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Filter Status Kehadiran</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer font-medium"
+            >
+              <option value="Semua">Semua Status</option>
+              <option value="Hadir">Hadir</option>
+              <option value="Izin">Izin</option>
+              <option value="Alpa / Belum Presensi">Alpa / Belum Presensi</option>
             </select>
           </div>
         </div>
@@ -325,35 +345,43 @@ export default function RekapPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredGenerus.map((g) => {
-                    const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-', metode: '-' }
+                  {filteredGenerus.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-gray-400 text-sm">
+                        Tidak ada data generus yang sesuai dengan filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredGenerus.map((g) => {
+                      const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-', metode: '-' }
 
-                    return (
-                      <tr key={g.id} className="hover:bg-gray-50/50 transition">
-                        <td className="p-4">
-                          <div className="font-semibold text-gray-800">{g.nama}</div>
-                          <div className="text-xs text-gray-400">{g.jenis_kelamin}</div>
-                        </td>
-                        <td className="p-4 text-gray-600">{g.kelompok}</td>
-                        <td className="p-4 text-gray-600">{g.kelas}</td>
-                        <td className="p-4">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              pData.status === 'Hadir'
-                                ? 'bg-green-100 text-green-700'
-                                : pData.status === 'Izin'
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-gray-100 text-gray-500'
-                            }`}
-                          >
-                            {pData.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-gray-600 text-xs">{pData.alasan}</td>
-                        <td className="p-4 text-center text-xs text-gray-400 font-mono">{pData.metode}</td>
-                      </tr>
-                    )
-                  })}
+                      return (
+                        <tr key={g.id} className="hover:bg-gray-50/50 transition">
+                          <td className="p-4">
+                            <div className="font-semibold text-gray-800">{g.nama}</div>
+                            <div className="text-xs text-gray-400">{g.jenis_kelamin}</div>
+                          </td>
+                          <td className="p-4 text-gray-600">{g.kelompok}</td>
+                          <td className="p-4 text-gray-600">{g.kelas}</td>
+                          <td className="p-4">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                pData.status === 'Hadir'
+                                  ? 'bg-green-100 text-green-700'
+                                  : pData.status === 'Izin'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-gray-100 text-gray-500'
+                              }`}
+                            >
+                              {pData.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-gray-600 text-xs">{pData.alasan}</td>
+                          <td className="p-4 text-center text-xs text-gray-400 font-mono">{pData.metode}</td>
+                        </tr>
+                      )
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
