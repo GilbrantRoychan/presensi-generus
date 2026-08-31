@@ -15,6 +15,7 @@ export default function RekapEditPage() {
   // Filter Dropdown State
   const [selectedKelompok, setSelectedKelompok] = useState<string>('Semua')
   const [selectedJK, setSelectedJK] = useState<string>('Semua')
+  const [selectedStatus, setSelectedStatus] = useState<string>('Semua')
   const [searchQuery, setSearchQuery] = useState('')
   
   const [loading, setLoading] = useState(false)
@@ -138,10 +139,12 @@ export default function RekapEditPage() {
   const filteredGenerus = generusList.filter((g) => {
     const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
     const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
+    const currentStatus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
+    const matchStatus = selectedStatus === 'Semua' || currentStatus === selectedStatus
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchKelompok && matchJK && matchSearch
+    return matchKelompok && matchJK && matchStatus && matchSearch
   })
 
   // Hitung Statistik Presensi Berdasarkan Data Terfilter
@@ -249,7 +252,7 @@ export default function RekapEditPage() {
         </div>
 
         {/* Dropdown Acara & Filter */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
             <select
@@ -291,6 +294,20 @@ export default function RekapEditPage() {
               <option value="Semua">Semua Jenis Kelamin</option>
               <option value="Laki-laki">Laki-laki</option>
               <option value="Perempuan">Perempuan</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Filter Status Kehadiran</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Semua">Semua Status</option>
+              <option value="Hadir">Hadir</option>
+              <option value="Izin">Izin</option>
+              <option value="Alpa / Belum Presensi">Alpa / Belum Presensi</option>
             </select>
           </div>
         </div>
