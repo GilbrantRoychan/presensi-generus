@@ -84,6 +84,8 @@ export default function RekapPage() {
 
   // Filter Data
   const filteredGenerus = generusList.filter((g) => {
+    const statusGenerus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
+    
     const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
     const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
     const currentStatus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
@@ -91,6 +93,11 @@ export default function RekapPage() {
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchStatus = selectedStatus === 'Semua' || statusGenerus === selectedStatus
+    const matchSearch =
+      g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
+
     return matchKelompok && matchJK && matchStatus && matchSearch
   })
 
@@ -144,11 +151,21 @@ export default function RekapPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      <div className="max-w-6xl mx-auto px-3 pt-13 pb-4 sm:px-4 sm:pt-13 sm:pb-4 lg:px-4 lg:pt-13 lg:pb-4 space-y-4 sm:space-y-6">
-      {/* CSS Khusus Format Cetak PDF */}
+    <div className="min-h-screen bg-slate-900 print:bg-white print:p-0">
+      <div className="max-w-6xl mx-auto px-3 pt-13 pb-4 sm:px-4 sm:pt-13 sm:pb-4 lg:px-4 lg:pt-13 lg:pb-4 space-y-4 sm:space-y-6 print:max-w-none print:p-0 print:m-0">
+      {/* CSS Khusus Format Cetak PDF Presisi */}
       <style jsx global>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 12mm;
+          }
+          body {
+            background-color: white !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           body * {
             visibility: hidden;
           }
@@ -163,6 +180,9 @@ export default function RekapPage() {
           }
           .no-print {
             display: none !important;
+          }
+          .print-border-table th, .print-border-table td {
+            border: 1px solid #d1d5db !important;
           }
         }
       `}</style>
@@ -207,6 +227,7 @@ export default function RekapPage() {
 
         {/* Dropdown Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
             <select
@@ -257,6 +278,7 @@ export default function RekapPage() {
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
               className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer"
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer font-medium"
             >
               <option value="Semua">Semua Status</option>
               <option value="Hadir">Hadir</option>
@@ -269,41 +291,59 @@ export default function RekapPage() {
 
       {/* AREA UTAMA YANG DICETAK / PDF */}
       <div id="print-area" className="space-y-4">
-        {/* Header Khusus Tampilan Print PDF */}
+        {/* Header Format Laporan Resmi untuk Cetak PDF */}
         {selectedAcaraObj && (
-          <div className="hidden print:block mb-6 border-b pb-4">
-            <h2 className="text-2xl font-bold text-gray-900">REKAP PRESENSI GENERUS</h2>
-            <p className="text-sm text-gray-600">Acara: {selectedAcaraObj.nama_acara} ({selectedAcaraObj.tanggal})</p>
-            <p className="text-sm text-gray-600">Lokasi: {selectedAcaraObj.lokasi || '-'}</p>
+          <div className="hidden print:block mb-4">
+            <div className="border-t-2 border-b-2 border-gray-800 py-3 mb-4 text-center">
+              <h1 className="text-xl font-black tracking-wide text-gray-900 uppercase">
+                LAPORAN REKAPITULASI PRESENSI
+              </h1>
+            </div>
+
+            {/* Grid Metadata Laporan */}
+            <div className="grid grid-cols-2 gap-y-1.5 text-xs text-gray-800 font-medium mb-4">
+              <div>
+                <span className="font-bold">Nama Acara:</span> {selectedAcaraObj.nama_acara?.toUpperCase()}
+              </div>
+              <div>
+                <span className="font-bold">Tanggal:</span> {selectedAcaraObj.tanggal}
+              </div>
+              <div>
+                <span className="font-bold">Lokasi:</span> {selectedAcaraObj.lokasi || '-'}
+              </div>
+              <div>
+                <span className="font-bold">Koordinator:</span> {selectedAcaraObj.koor || '-'}
+              </div>
+            </div>
           </div>
         )}
 
         {/* Kartu Statistik Rekap */}
         {selectedAcara && (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-              <p className="text-xs text-gray-500 font-medium">Total Generus</p>
-              <p className="text-xl font-bold text-gray-800">{totalGenerus}</p>
+          <div className="grid grid-cols-5 gap-3 print:gap-2 mb-4">
+            <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
+              <p className="text-[11px] text-gray-600 font-semibold leading-tight">Total Generus</p>
+              <p className="text-lg print:text-base font-bold text-gray-900 mt-1">{totalGenerus}</p>
             </div>
 
-            <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-              <p className="text-xs text-gray-500 font-medium">Hadir</p>
-              <p className="text-xl font-bold text-green-600">{totalHadir}</p>
+            <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
+              <p className="text-[11px] text-gray-600 font-semibold leading-tight">Hadir</p>
+              <p className="text-lg print:text-base font-bold text-green-600 mt-1">{totalHadir}</p>
             </div>
 
-            <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-              <p className="text-xs text-gray-500 font-medium">Izin</p>
-              <p className="text-xl font-bold text-amber-600">{totalIzin}</p>
+            <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
+              <p className="text-[11px] text-gray-600 font-semibold leading-tight">Izin</p>
+              <p className="text-lg print:text-base font-bold text-amber-600 mt-1">{totalIzin}</p>
             </div>
 
-            <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-center">
-              <p className="text-xs text-gray-500 font-medium">Alpa</p>
-              <p className="text-xl font-bold text-gray-400">{totalAlpa}</p>
+            <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
+              <p className="text-[11px] text-gray-600 font-semibold leading-tight">Alpa</p>
+              <p className="text-lg print:text-base font-bold text-gray-500 mt-1">{totalAlpa}</p>
             </div>
 
-            <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 col-span-2 sm:col-span-1 flex flex-col justify-center">
-              <p className="text-xs text-gray-500 font-medium">Kehadiran</p>
-              <p className="text-xl font-bold text-blue-600">{persentaseHadir}%</p>
+            <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
+              <p className="text-[11px] text-gray-600 font-semibold leading-tight">Persentase</p>
+              <p className="text-lg print:text-base font-bold text-blue-600 mt-1">{persentaseHadir}%</p>
             </div>
           </div>
         )}
@@ -321,56 +361,71 @@ export default function RekapPage() {
         </div>
 
         {/* Tabel Data Rekap */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-xl print:rounded-none shadow-sm print:shadow-none border border-gray-100 print:border-none overflow-hidden">
           {!selectedAcara ? (
-            <div className="p-8 text-center text-gray-400 text-sm">
+            <div className="p-8 text-center text-gray-400 text-sm no-print">
               Silakan pilih acara terlebih dahulu untuk melihat rekap kehadiran.
             </div>
           ) : loading ? (
-            <div className="p-8 text-center text-gray-500 text-sm">Memuat data rekap...</div>
+            <div className="p-8 text-center text-gray-500 text-sm no-print">Memuat data rekap...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500 font-semibold">
+              <table className="w-full text-left text-sm print:text-xs print-border-table border-collapse">
+                <thead className="bg-gray-50 print:bg-white border-b text-xs print:text-[11px] uppercase text-gray-700 font-bold">
                   <tr>
-                    <th className="p-4">Nama Generus</th>
-                    <th className="p-4">Kelompok</th>
-                    <th className="p-4">Kelas</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">Alasan / Keterangan</th>
-                    <th className="p-4 text-center">Metode</th>
+                    <th className="p-3 print:p-2 border-gray-200 w-2/5">NAMA GENERUS</th>
+                    <th className="p-3 print:p-2 border-gray-200 w-1/4">KELOMPOK / KELAS</th>
+                    <th className="p-3 print:p-2 border-gray-200 w-1/5">STATUS KEHADIRAN</th>
+                    <th className="p-3 print:p-2 border-gray-200">ALASAN (IZIN / SAKIT)</th>
+                    <th className="p-3 print:p-2 border-gray-200 text-center no-print">METODE</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredGenerus.map((g) => {
-                    const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-', metode: '-' }
+                <tbody className="divide-y divide-gray-100 print:divide-gray-300">
+                  {filteredGenerus.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-gray-400 text-sm">
+                        Tidak ada data generus yang sesuai dengan filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredGenerus.map((g) => {
+                      const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-', metode: '-' }
 
-                    return (
-                      <tr key={g.id} className="hover:bg-gray-50/50 transition">
-                        <td className="p-4">
-                          <div className="font-semibold text-gray-800">{g.nama}</div>
-                          <div className="text-xs text-gray-400">{g.jenis_kelamin}</div>
-                        </td>
-                        <td className="p-4 text-gray-600">{g.kelompok}</td>
-                        <td className="p-4 text-gray-600">{g.kelas}</td>
-                        <td className="p-4">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              pData.status === 'Hadir'
-                                ? 'bg-green-100 text-green-700'
-                                : pData.status === 'Izin'
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-gray-100 text-gray-500'
-                            }`}
-                          >
-                            {pData.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-gray-600 text-xs">{pData.alasan}</td>
-                        <td className="p-4 text-center text-xs text-gray-400 font-mono">{pData.metode}</td>
-                      </tr>
-                    )
-                  })}
+                      return (
+                        <tr key={g.id} className="hover:bg-gray-50/50 transition">
+                          <td className="p-3 print:p-2 border-gray-200">
+                            <div className="font-bold text-gray-900 uppercase tracking-wide print:text-[11px]">
+                              {g.nama}
+                            </div>
+                            <div className="text-xs print:text-[10px] text-gray-500 capitalize">{g.jenis_kelamin}</div>
+                          </td>
+                          <td className="p-3 print:p-2 border-gray-200 text-gray-700 font-medium">
+                            <div>{g.kelompok}</div>
+                            <div className="text-xs print:text-[10px] text-gray-500">{g.kelas}</div>
+                          </td>
+                          <td className="p-3 print:p-2 border-gray-200">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 print:px-0 print:py-0 rounded-full print:rounded-none text-xs print:text-[11px] font-semibold ${
+                                pData.status === 'Hadir'
+                                  ? 'bg-green-100 print:bg-transparent text-green-700 print:text-gray-900'
+                                  : pData.status === 'Izin'
+                                  ? 'bg-amber-100 print:bg-transparent text-amber-700 print:text-gray-900'
+                                  : 'bg-gray-100 print:bg-transparent text-gray-500 print:text-gray-900'
+                              }`}
+                            >
+                              {pData.status}
+                            </span>
+                          </td>
+                          <td className="p-3 print:p-2 border-gray-200 text-gray-700 text-xs print:text-[11px]">
+                            {pData.alasan}
+                          </td>
+                          <td className="p-3 print:p-2 border-gray-200 text-center text-xs text-gray-400 font-mono no-print">
+                            {pData.metode}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
