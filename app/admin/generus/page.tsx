@@ -3,17 +3,18 @@
 import { useState, useEffect, ChangeEvent } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import * as XLSX from 'xlsx'
-import { 
-  Users, 
-  Search, 
-  Plus, 
-  Upload, 
-  Edit, 
-  Trash2, 
-  X, 
-  Check, 
+import {
+  Users,
+  Search,
+  Plus,
+  Upload,
+  Edit,
+  Trash2,
+  X,
+  Check,
   FileSpreadsheet,
-  Filter 
+  Filter,
+  Download,
 } from 'lucide-react'
 
 // Interface Data Generus
@@ -39,15 +40,15 @@ const normalizeExcelKey = (key: unknown) =>
 
 const toExcelText = (value: unknown, fallback = '') => {
   if (value === null || value === undefined) return fallback
-  return String(value).replace(/[\u200B-\u200D\uFEFF]/g, '').trim()
+  return String(value)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim()
 }
 
 const normalizeJenisKelamin = (value: unknown) => {
   const normalized = toExcelText(value).toLowerCase()
-
   if (/^(p|pr|perempuan|wanita|female|f)$/.test(normalized)) return 'Perempuan'
   if (/^(l|lk|laki[- ]?laki|pria|male|m)$/.test(normalized)) return 'Laki-laki'
-
   return normalized ? toExcelText(value) : 'Laki-laki'
 }
 
@@ -57,7 +58,6 @@ const sortGenerus = (data: Generus[]) => {
     const orderA = KELOMPOK_ORDER.indexOf(a.kelompok)
     const orderB = KELOMPOK_ORDER.indexOf(b.kelompok)
 
-    // Jika kelompok A dan B ada di daftar acuan
     if (orderA !== -1 && orderB !== -1) {
       if (orderA !== orderB) {
         return orderA - orderB
@@ -67,19 +67,17 @@ const sortGenerus = (data: Generus[]) => {
     } else if (orderB !== -1) {
       return 1
     } else {
-      // Jika kelompok tidak ada di daftar acuan, bandingkan nama kelompok secara alfabetis
       const kelCompare = (a.kelompok || '').localeCompare(b.kelompok || '')
       if (kelCompare !== 0) return kelCompare
     }
 
-    // Jika kelompok sama, urutkan berdasarkan Nama (A-Z)
     return a.nama.localeCompare(b.nama)
   })
 }
 
 export default function AdminGenerusPage() {
   const supabase = createClient()
-  
+
   // State Utama
   const [generusList, setGenerusList] = useState<Generus[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,9 +90,9 @@ export default function AdminGenerusPage() {
   const [editingData, setEditingData] = useState<Generus | null>(null)
   const [formData, setFormData] = useState<Generus>({
     nama: '',
-    kelompok: 'Pilih Kelompok',
-    jenis_kelamin: 'Pilih Jenis kelamin',
-    kelas: 'Pilih Kelas'
+    kelompok: 'GONJEN 1',
+    jenis_kelamin: 'Laki-laki',
+    kelas: 'Pra Remaja',
   })
 
   // State File Import
@@ -108,10 +106,7 @@ export default function AdminGenerusPage() {
   // 1. Fetch Data dari Supabase & Urutkan secara Kustom
   const fetchGenerus = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('generus')
-      .select('*')
-
+    const { data, error } = await supabase.from('generus').select('*')
     if (data && !error) {
       const sortedData = sortGenerus(data as Generus[])
       setGenerusList(sortedData)
@@ -132,7 +127,7 @@ export default function AdminGenerusPage() {
           nama: formData.nama,
           kelompok: formData.kelompok,
           jenis_kelamin: formData.jenis_kelamin,
-          kelas: formData.kelas
+          kelas: formData.kelas,
         })
         .eq('id', editingData.id)
 
@@ -140,14 +135,14 @@ export default function AdminGenerusPage() {
       else alert('Data berhasil diperbarui!')
     } else {
       // Insert Baru
-      const { error } = await supabase
-        .from('generus')
-        .insert([{
+      const { error } = await supabase.from('generus').insert([
+        {
           nama: formData.nama,
           kelompok: formData.kelompok,
           jenis_kelamin: formData.jenis_kelamin,
-          kelas: formData.kelas
-        }])
+          kelas: formData.kelas,
+        },
+      ])
 
       if (error) alert('Gagal menambah data: ' + error.message)
       else alert('Data baru berhasil ditambahkan!')
@@ -160,11 +155,7 @@ export default function AdminGenerusPage() {
   // 3. Fungsi Hapus Data
   const handleDelete = async (id: string, nama: string) => {
     if (confirm(`Apakah Anda yakin ingin menghapus data ${nama}?`)) {
-      const { error } = await supabase
-        .from('generus')
-        .delete()
-        .eq('id', id)
-
+      const { error } = await supabase.from('generus').delete().eq('id', id)
       if (error) alert('Gagal menghapus data: ' + error.message)
       else {
         alert('Data berhasil dihapus!')
@@ -180,36 +171,73 @@ export default function AdminGenerusPage() {
         nama: 'Contoh Nama Generus 1',
         kelompok: 'GONJEN 1',
         jenis_kelamin: 'Laki-laki',
-        kelas: 'Pra Remaja'
+        kelas: 'Pra Remaja',
       },
       {
         nama: 'Contoh Nama Generus 2',
         kelompok: 'GONJEN 2',
         jenis_kelamin: 'Perempuan',
-        kelas: 'Remaja'
-      }
+        kelas: 'Remaja',
+      },
     ]
-
     const worksheet = XLSX.utils.json_to_sheet(templateData)
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Generus')
     XLSX.writeFile(workbook, 'Template_Import_Generus.xlsx')
   }
 
-  // 5. Import Massal (Bulk Upload Excel / CSV)
+  // 5. Export Semua Data / Data Terfilter ke Excel
+  const handleExportExcel = () => {
+    if (filteredGenerus.length === 0) {
+      return alert('Tidak ada data generus yang sesuai untuk diekspor!')
+    }
+
+    const exportData = filteredGenerus.map((item, index) => ({
+      No: index + 1,
+      'Nama Lengkap': item.nama,
+      Kelompok: item.kelompok || '-',
+      'Jenis Kelamin': item.jenis_kelamin || '-',
+      'Kelas / Tingkat': item.kelas || '-',
+      'Kode QR / ID': item.qr_code_id || item.qr_code || item.id || '-',
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Generus')
+
+    // Atur lebar kolom otomatis
+    worksheet['!cols'] = [
+      { wch: 5 },
+      { wch: 30 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 25 },
+    ]
+
+    const filename =
+      selectedKelompok === 'Semua Kelompok'
+        ? 'Data_Seluruh_Generus.xlsx'
+        : `Data_Generus_${selectedKelompok.replace(/\s+/g, '_')}.xlsx`
+
+    XLSX.writeFile(workbook, filename)
+  }
+
+  // 6. Import Massal (Bulk Upload Excel / CSV)
   const handleImportExcel = async () => {
     if (!importFile) return alert('Pilih berkas Excel/CSV terlebih dahulu!')
-
     setUploading(true)
-    const reader = new FileReader()
 
+    const reader = new FileReader()
     reader.onload = async (e) => {
       try {
         const buffer = e.target?.result
         const workbook = XLSX.read(buffer, { type: 'array' })
         const sheetName = workbook.SheetNames[0]
         const sheet = workbook.Sheets[sheetName]
-        const parsedData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
+        const parsedData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+          defval: '',
+        })
 
         if (parsedData.length === 0) {
           alert('File kosong atau format tidak sesuai!')
@@ -217,29 +245,30 @@ export default function AdminGenerusPage() {
           return
         }
 
-        // Format data agar sesuai kolom Supabase
-        const formattedData = parsedData.map((row) => {
-          const normalizedRow = Object.fromEntries(
-            Object.entries(row).map(([key, value]) => [normalizeExcelKey(key), value])
-          )
-          const nama = toExcelText(normalizedRow.nama || normalizedRow.namalengkap)
-          const jenisKelamin =
-            normalizedRow.jeniskelamin ||
-            normalizedRow.jeniskelaminlp ||
-            normalizedRow.jk ||
-            normalizedRow.gender
+        const formattedData = parsedData
+          .map((row) => {
+            const normalizedRow = Object.fromEntries(
+              Object.entries(row).map(([key, value]) => [normalizeExcelKey(key), value])
+            )
+            const nama = toExcelText(normalizedRow.nama || normalizedRow.namalengkap)
+            const jenisKelamin =
+              normalizedRow.jeniskelamin ||
+              normalizedRow.jeniskelaminlp ||
+              normalizedRow.jk ||
+              normalizedRow.gender
+            return {
+              nama,
+              kelompok: toExcelText(normalizedRow.kelompok, 'GONJEN 1'),
+              jenis_kelamin: normalizeJenisKelamin(jenisKelamin),
+              kelas: toExcelText(
+                normalizedRow.kelas || normalizedRow.kelastingkat,
+                'Pra Remaja'
+              ),
+            }
+          })
+          .filter((item) => item.nama !== '')
 
-          return {
-            nama,
-            kelompok: toExcelText(normalizedRow.kelompok, 'GONJEN 1'),
-            jenis_kelamin: normalizeJenisKelamin(jenisKelamin),
-            kelas: toExcelText(normalizedRow.kelas || normalizedRow.kelastingkat, 'Pra Remaja')
-          }
-        }).filter(item => item.nama !== '')
-
-        const { error } = await supabase
-          .from('generus')
-          .insert(formattedData)
+        const { error } = await supabase.from('generus').insert(formattedData)
 
         if (error) {
           alert('Gagal mengimpor data: ' + error.message)
@@ -256,14 +285,18 @@ export default function AdminGenerusPage() {
         setUploading(false)
       }
     }
-
     reader.readAsArrayBuffer(importFile)
   }
 
   // Helper Modal
   const openAddModal = () => {
     setEditingData(null)
-    setFormData({ nama: '', kelompok: 'GONJEN 1', jenis_kelamin: 'Laki-laki', kelas: 'Pra Remaja' })
+    setFormData({
+      nama: '',
+      kelompok: 'GONJEN 1',
+      jenis_kelamin: 'Laki-laki',
+      kelas: 'Pra Remaja',
+    })
     setIsModalOpen(true)
   }
 
@@ -273,7 +306,7 @@ export default function AdminGenerusPage() {
       nama: item.nama,
       kelompok: item.kelompok || 'GONJEN 1',
       jenis_kelamin: item.jenis_kelamin || 'Laki-laki',
-      kelas: item.kelas || 'Pra Remaja'
+      kelas: item.kelas || 'Pra Remaja',
     })
     setIsModalOpen(true)
   }
@@ -284,24 +317,30 @@ export default function AdminGenerusPage() {
   }
 
   // Filtering Data berdasarkan Kelompok dan Pencarian
-  const kelompokList = Array.from(new Set(generusList.map(g => g.kelompok).filter(Boolean)))
-  
-  const filteredGenerus = generusList.filter(g => {
-    const matchKelompok = selectedKelompok === 'Semua Kelompok' || g.kelompok === selectedKelompok
-    const matchSearch = g.nama.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                        (g.kelas && g.kelas.toLowerCase().includes(searchQuery.toLowerCase()))
+  const kelompokList = Array.from(
+    new Set(generusList.map((g) => g.kelompok).filter(Boolean))
+  )
+  const filteredGenerus = generusList.filter((g) => {
+    const matchKelompok =
+      selectedKelompok === 'Semua Kelompok' || g.kelompok === selectedKelompok
+    const matchSearch =
+      g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (g.kelas && g.kelas.toLowerCase().includes(searchQuery.toLowerCase()))
     return matchKelompok && matchSearch
   })
 
-  // Ringkasan Statistik Dinamis (Mengikuti Data yang Difilter)
+  // Ringkasan Statistik Dinamis
   const totalGenerus = filteredGenerus.length
-  const totalLaki = filteredGenerus.filter(g => g.jenis_kelamin?.toLowerCase().includes('laki')).length
-  const totalPerempuan = filteredGenerus.filter(g => g.jenis_kelamin?.toLowerCase().includes('perempuan')).length
+  const totalLaki = filteredGenerus.filter((g) =>
+    g.jenis_kelamin?.toLowerCase().includes('laki')
+  ).length
+  const totalPerempuan = filteredGenerus.filter((g) =>
+    g.jenis_kelamin?.toLowerCase().includes('perempuan')
+  ).length
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
-        
         {/* Header Section & Action Bar */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -310,30 +349,31 @@ export default function AdminGenerusPage() {
               Kelola dan lihat ringkasan data seluruh anggota generus.
             </p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2">
+            {/* Tombol Export Data */}
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Download className="w-4 h-4" /> Export Data
+            </button>
             <button
               onClick={handleDownloadTemplate}
-              className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              Template Excel
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Template Excel
             </button>
-
             <button
               onClick={() => setIsImportModalOpen(true)}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
-              <Upload className="w-4 h-4" />
-              Import Data
+              <Upload className="w-4 h-4" /> Import Data
             </button>
-
             <button
               onClick={openAddModal}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-500/20"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              Tambah Manual
+              <Plus className="w-4 h-4" /> Tambah Manual
             </button>
           </div>
         </div>
@@ -351,7 +391,6 @@ export default function AdminGenerusPage() {
               <Users className="w-5 h-5" />
             </div>
           </div>
-
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Laki-laki</p>
@@ -361,7 +400,6 @@ export default function AdminGenerusPage() {
               <Users className="w-5 h-5" />
             </div>
           </div>
-
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perempuan</p>
@@ -385,7 +423,6 @@ export default function AdminGenerusPage() {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
             />
           </div>
-
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Filter className="w-4 h-4 text-slate-400" />
             <select
@@ -395,7 +432,9 @@ export default function AdminGenerusPage() {
             >
               <option value="Semua Kelompok">Semua Kelompok</option>
               {kelompokList.map((kel) => (
-                <option key={kel} value={kel}>{kel}</option>
+                <option key={kel} value={kel}>
+                  {kel}
+                </option>
               ))}
             </select>
           </div>
@@ -434,11 +473,13 @@ export default function AdminGenerusPage() {
                       <td className="py-3.5 px-4 font-bold text-slate-900">{item.nama}</td>
                       <td className="py-3.5 px-4 text-slate-600 font-medium">{item.kelompok || '-'}</td>
                       <td className="py-3.5 px-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                          item.jenis_kelamin?.toLowerCase().includes('perempuan')
-                            ? 'bg-pink-50 text-pink-600 border border-pink-100'
-                            : 'bg-blue-50 text-blue-600 border border-blue-100'
-                        }`}>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            item.jenis_kelamin?.toLowerCase().includes('perempuan')
+                              ? 'bg-pink-50 text-pink-600 border border-pink-100'
+                              : 'bg-blue-50 text-blue-600 border border-blue-100'
+                          }`}
+                        >
                           {item.jenis_kelamin}
                         </span>
                       </td>
@@ -471,7 +512,6 @@ export default function AdminGenerusPage() {
             </table>
           </div>
         </div>
-
       </main>
 
       {/* Modal CRUD Manual (Tambah / Edit) */}
@@ -486,7 +526,6 @@ export default function AdminGenerusPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <form onSubmit={handleSaveManual} className="space-y-4 text-xs sm:text-sm">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Nama Lengkap</label>
@@ -499,7 +538,6 @@ export default function AdminGenerusPage() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Kelompok</label>
                 <select
@@ -507,13 +545,12 @@ export default function AdminGenerusPage() {
                   onChange={(e) => setFormData({ ...formData, kelompok: e.target.value })}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="GONJEN 1">GONJEN 1</option>  
+                  <option value="GONJEN 1">GONJEN 1</option>
                   <option value="GONJEN 2">GONJEN 2</option>
                   <option value="KEMBARAN">KEMBARAN</option>
                   <option value="SEMBUNG">SEMBUNG</option>
                 </select>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Jenis Kelamin</label>
@@ -526,7 +563,6 @@ export default function AdminGenerusPage() {
                     <option value="Perempuan">Perempuan</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Kelas / Tingkat</label>
                   <select
@@ -541,7 +577,6 @@ export default function AdminGenerusPage() {
                   </select>
                 </div>
               </div>
-
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -554,8 +589,7 @@ export default function AdminGenerusPage() {
                   type="submit"
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition flex items-center gap-1"
                 >
-                  <Check className="w-4 h-4" />
-                  Simpan
+                  <Check className="w-4 h-4" /> Simpan
                 </button>
               </div>
             </form>
@@ -568,37 +602,28 @@ export default function AdminGenerusPage() {
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">Import Data Generus (.xlsx / .csv)</h3>
-              <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <h3 className="text-base font-bold text-slate-900">
+                Import Data Generus (.xlsx / .csv)
+              </h3>
+              <button
+                onClick={() => setIsImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="space-y-4 text-xs sm:text-sm">
               <p className="text-slate-500">
                 Gunakan template Excel resmi agar format kolom sesuai saat diunggah ke sistem.
               </p>
-
               <div className="border-2 border-dashed border-slate-200 p-6 rounded-2xl text-center bg-slate-50/50">
-                <FileSpreadsheet className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
                 <input
                   type="file"
-                  accept=".xlsx, .xls, .csv"
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    if (e.target.files?.[0]) setImportFile(e.target.files[0])
-                  }}
-                  className="hidden"
-                  id="excel-input"
+                  accept=".xlsx, .csv"
+                  onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
                 />
-                <label
-                  htmlFor="excel-input"
-                  className="cursor-pointer text-blue-600 font-bold hover:underline block"
-                >
-                  {importFile ? importFile.name : 'Pilih Berkas Excel / CSV'}
-                </label>
-                <span className="text-[11px] text-slate-400 mt-1 block">Mendukung format .xlsx, .xls, .csv</span>
               </div>
-
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -609,19 +634,17 @@ export default function AdminGenerusPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={uploading || !importFile}
                   onClick={handleImportExcel}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-xl font-bold transition flex items-center gap-1.5"
+                  disabled={uploading || !importFile}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  <Upload className="w-4 h-4" />
-                  {uploading ? 'Memproses...' : 'Upload & Impor'}
+                  <Upload className="w-4 h-4" /> {uploading ? 'Mengunggah...' : 'Unggah Data'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   )
 }
