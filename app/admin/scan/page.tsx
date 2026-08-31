@@ -121,7 +121,7 @@ export default function AdminScanPage() {
   }, [selectedAcara])
 
   async function fetchAcara() {
-    const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: false })
+    const { data } = await supabase.from('acara').select('*').order('tanggal', { ascending: true })
     if (data && data.length > 0) {
       setAcaraList(data)
       setSelectedAcara(data[0].id)
