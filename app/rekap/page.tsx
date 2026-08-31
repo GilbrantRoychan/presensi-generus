@@ -37,7 +37,7 @@ export default function RekapPage() {
     const { data } = await supabase
       .from('acara')
       .select('*')
-      .order('tanggal', { ascending: false })
+      .order('tanggal', { ascending: true })
     if (data) setAcaraList(data)
   }
 
