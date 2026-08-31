@@ -88,6 +88,11 @@ export default function RekapPage() {
     
     const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
     const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
+    const currentStatus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
+    const matchStatus = selectedStatus === 'Semua' || currentStatus === selectedStatus
+    const matchSearch =
+      g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
     const matchStatus = selectedStatus === 'Semua' || statusGenerus === selectedStatus
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -221,6 +226,7 @@ export default function RekapPage() {
         </div>
 
         {/* Dropdown Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 pt-2">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
@@ -271,6 +277,7 @@ export default function RekapPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer"
               className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 text-stone-800 cursor-pointer font-medium"
             >
               <option value="Semua">Semua Status</option>
