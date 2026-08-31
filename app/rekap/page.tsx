@@ -72,8 +72,7 @@ export default function RekapPage() {
 
           pMap[p.generus_id] = {
             status: currentStatus,
-            alasan: p.alasan || '-',
-            metode: p.metode || 'Manual'
+            alasan: p.alasan || '-'
           }
         })
       }
