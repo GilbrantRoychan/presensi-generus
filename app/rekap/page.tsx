@@ -1,48 +1,67 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, Search, Download, Printer } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-export default function RekapPage() {
-  const supabase = createClient()
-  const [acaraList, setAcaraList] = useState<any[]>([])
-  const [selectedAcara, setSelectedAcara] = useState<string>('')
-  const [selectedAcaraObj, setSelectedAcaraObj] = useState<any>(null)
-  const [generusList, setGenerusList] = useState<any[]>([])
-  const [presensiMap, setPresensiMap] = useState<{ [key: string]: { status: string; alasan: string } }>({})
+type AcaraItem = {
+  id: string
+  nama_acara: string
+  tanggal: string
+  lokasi?: string
+  koor?: string
+}
 
-  // Filter State
+type GenerusItem = {
+  id: string
+  nama: string
+  kelas: string
+  kelompok: string
+  jenis_kelamin: string
+}
+
+type PresensiEntry = {
+  status: 'Hadir' | 'Izin' | 'Alpa / Belum Presensi'
+  alasan: string
+  metode: string
+}
+
+export default function RekapPage() {
+  const supabase = useMemo(() => createClient(), [])
+  const [acaraList, setAcaraList] = useState<AcaraItem[]>([])
+  const [selectedAcara, setSelectedAcara] = useState<string>('')
+  const [generusList, setGenerusList] = useState<GenerusItem[]>([])
+  const [presensiMap, setPresensiMap] = useState<Record<string, PresensiEntry>>({})
+
   const [selectedKelompok, setSelectedKelompok] = useState<string>('Semua')
   const [selectedJK, setSelectedJK] = useState<string>('Semua')
   const [selectedStatus, setSelectedStatus] = useState<string>('Semua')
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    fetchAcara()
-  }, [])
+  const selectedAcaraObj = useMemo(
+    () => acaraList.find((acara) => acara.id === selectedAcara) ?? null,
+    [acaraList, selectedAcara],
+  )
 
-  useEffect(() => {
-    if (selectedAcara) {
-      const acara = acaraList.find((a) => a.id === selectedAcara)
-      setSelectedAcaraObj(acara || null)
-      fetchRekapData()
-    }
-  }, [selectedAcara])
-
-  const fetchAcara = async () => {
+  const fetchAcara = useCallback(async () => {
     const { data } = await supabase
       .from('acara')
       .select('*')
       .order('tanggal', { ascending: true })
-    if (data) setAcaraList(data)
-  }
 
-  const fetchRekapData = async () => {
+    if (data) {
+      setAcaraList(data as AcaraItem[])
+    }
+  }, [supabase])
+
+  const fetchRekapData = useCallback(async () => {
+    if (!selectedAcara) return
+
     setLoading(true)
+
     const { data: generusData } = await supabase
       .from('generus')
       .select('*')
@@ -55,77 +74,104 @@ export default function RekapPage() {
       .eq('acara_id', selectedAcara)
 
     if (generusData) {
-      setGenerusList(generusData)
-      const pMap: { [key: string]: { status: string; alasan: string } } = {}
-      generusData.forEach((g) => {
-        pMap[g.id] = { status: 'Alpa / Belum Presensi', alasan: '-' }
+      setGenerusList(generusData as GenerusItem[])
+
+      const nextMap: Record<string, PresensiEntry> = {}
+      generusData.forEach((generus) => {
+        nextMap[generus.id] = {
+          status: 'Alpa / Belum Presensi',
+          alasan: '-',
+          metode: '-',
+        }
       })
 
       if (presensiData) {
-        presensiData.forEach((p) => {
-          let currentStatus = p.status
+        presensiData.forEach((entry) => {
+          let currentStatus: PresensiEntry['status'] = 'Alpa / Belum Presensi'
+
           if (
-            currentStatus === 'sakit' ||
-            currentStatus === 'Sakit' ||
-            currentStatus === 'izin' ||
-            currentStatus === 'Izin'
+            entry.status === 'sakit' ||
+            entry.status === 'Sakit' ||
+            entry.status === 'izin' ||
+            entry.status === 'Izin'
           ) {
             currentStatus = 'Izin'
-          } else if (currentStatus === 'hadir' || currentStatus === 'Hadir') {
+          } else if (entry.status === 'hadir' || entry.status === 'Hadir') {
             currentStatus = 'Hadir'
-          } else {
-            currentStatus = 'Alpa / Belum Presensi'
           }
-          pMap[p.generus_id] = { status: currentStatus, alasan: p.alasan || '-' }
+
+          nextMap[entry.generus_id] = {
+            status: currentStatus,
+            alasan: entry.alasan || '-',
+            metode: entry.metode || 'Manual',
+          }
         })
       }
-      setPresensiMap(pMap)
-    }
-    setLoading(false)
-  }
 
-  // Filter Data
-  const filteredGenerus = generusList.filter((g) => {
-    const statusGenerus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
-    const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
-    const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
+      setPresensiMap(nextMap)
+    }
+
+    setLoading(false)
+  }, [selectedAcara, supabase])
+
+  useEffect(() => {
+    fetchAcara()
+  }, [fetchAcara])
+
+  useEffect(() => {
+    if (selectedAcara) {
+      fetchRekapData()
+    }
+  }, [fetchRekapData, selectedAcara])
+
+  const filteredGenerus = generusList.filter((generus) => {
+    const statusGenerus = presensiMap[generus.id]?.status || 'Alpa / Belum Presensi'
+    const matchKelompok = selectedKelompok === 'Semua' || generus.kelompok === selectedKelompok
+    const matchJK = selectedJK === 'Semua' || generus.jenis_kelamin === selectedJK
     const matchStatus = selectedStatus === 'Semua' || statusGenerus === selectedStatus
     const matchSearch =
-      g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      g.kelas.toLowerCase().includes(searchQuery.toLowerCase())
+      generus.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (generus.kelas || '').toLowerCase().includes(searchQuery.toLowerCase())
 
     return matchKelompok && matchJK && matchStatus && matchSearch
   })
 
-  // Hitung Statistik
   const totalGenerus = filteredGenerus.length
   let totalHadir = 0
   let totalIzin = 0
   let totalAlpa = 0
 
-  filteredGenerus.forEach((g) => {
-    const st = presensiMap[g.id]?.status
-    if (st === 'Hadir') totalHadir++
-    else if (st === 'Izin') totalIzin++
-    else totalAlpa++
+  filteredGenerus.forEach((generus) => {
+    const status = presensiMap[generus.id]?.status
+    if (status === 'Hadir') totalHadir += 1
+    else if (status === 'Izin') totalIzin += 1
+    else totalAlpa += 1
   })
 
   const persentaseHadir = totalGenerus > 0 ? ((totalHadir / totalGenerus) * 100).toFixed(1) : '0'
 
-  // Fitur 1: Export Ke Excel (.xlsx)
   const handleExportExcel = () => {
-    if (!selectedAcaraObj) return alert('Pilih acara terlebih dahulu!')
+    if (!selectedAcaraObj) {
+      alert('Pilih acara terlebih dahulu!')
+      return
+    }
 
-    const dataToExport = filteredGenerus.map((g, index) => {
-      const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-' }
+    const dataToExport = filteredGenerus.map((generus, index) => {
+      const pData = presensiMap[generus.id] || {
+        status: 'Alpa / Belum Presensi',
+        alasan: '-',
+        metode: '-',
+      }
+
       return {
-        'No': index + 1,
-        'Nama Lengkap': g.nama,
-        'Jenis Kelamin': g.jenis_kelamin,
-        'Kelompok': g.kelompok,
-        'Kelas / Tingkat': g.kelas,
+        No: index + 1,
+        'Nama Lengkap': generus.nama,
+        'Jenis Kelamin': generus.jenis_kelamin,
+        Kelompok: generus.kelompok,
+        'Kelas / Tingkat': generus.kelas,
         'Status Kehadiran': pData.status,
         'Alasan (Izin)': pData.alasan,
+        'Metode Presensi': pData.metode,
       }
     })
 
@@ -139,44 +185,52 @@ export default function RekapPage() {
     XLSX.writeFile(workbook, filename)
   }
 
-  // Fitur 2: Cetak / Save As PDF
   const handlePrintPDF = () => {
-    if (!selectedAcara) return alert('Pilih acara terlebih dahulu!')
+    if (!selectedAcara) {
+      alert('Pilih acara terlebih dahulu!')
+      return
+    }
+
     window.print()
   }
 
   return (
     <div className="min-h-screen bg-slate-900 print:bg-white print:p-0">
       <div className="max-w-6xl mx-auto px-3 pt-13 pb-4 sm:px-4 sm:pt-13 sm:pb-4 lg:px-4 lg:pt-13 lg:pb-4 space-y-4 sm:space-y-6 print:max-w-none print:p-0 print:m-0">
-        {/* CSS Khusus Format Cetak PDF Presisi */}
         <style jsx global>{`
           @media print {
             @page {
               size: A4 portrait;
               margin: 12mm;
             }
+
             body {
               background-color: white !important;
               color: black !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
+
             body * {
               visibility: hidden;
             }
+
             #print-area,
             #print-area * {
               visibility: visible;
             }
+
             #print-area {
               position: absolute;
               left: 0;
               top: 0;
               width: 100%;
             }
+
             .no-print {
               display: none !important;
             }
+
             .print-border-table th,
             .print-border-table td {
               border: 1px solid #d1d5db !important;
@@ -184,7 +238,6 @@ export default function RekapPage() {
           }
         `}</style>
 
-        {/* Control Panel (Sembunyikan saat di-print) */}
         <div className="no-print">
           <Link
             href="/"
@@ -203,7 +256,6 @@ export default function RekapPage() {
               </p>
             </div>
 
-            {/* Tombol Ekspor & Cetak */}
             {selectedAcara && (
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -222,7 +274,6 @@ export default function RekapPage() {
             )}
           </div>
 
-          {/* Dropdown Filters */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Pilih Acara</label>
@@ -232,9 +283,9 @@ export default function RekapPage() {
                 className="w-full p-2.5 border rounded-lg bg-gray-50 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium text-stone-800 cursor-pointer"
               >
                 <option value="">-- Pilih Acara --</option>
-                {acaraList.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.nama_acara} - {a.tanggal}
+                {acaraList.map((acara) => (
+                  <option key={acara.id} value={acara.id}>
+                    {acara.nama_acara} - {acara.tanggal}
                   </option>
                 ))}
               </select>
@@ -284,9 +335,7 @@ export default function RekapPage() {
           </div>
         </div>
 
-        {/* AREA UTAMA YANG DICETAK / PDF */}
         <div id="print-area" className="space-y-4">
-          {/* Header Format Laporan Resmi untuk Cetak PDF */}
           {selectedAcaraObj && (
             <div className="hidden print:block mb-4">
               <div className="border-t-2 border-b-2 border-gray-800 py-3 mb-4 text-center">
@@ -295,7 +344,6 @@ export default function RekapPage() {
                 </h1>
               </div>
 
-              {/* Grid Metadata Laporan */}
               <div className="grid grid-cols-2 gap-y-1.5 text-xs text-gray-800 font-medium mb-4">
                 <div>
                   <span className="font-bold">Nama Acara:</span> {selectedAcaraObj.nama_acara?.toUpperCase()}
@@ -313,25 +361,28 @@ export default function RekapPage() {
             </div>
           )}
 
-          {/* Kartu Statistik Rekap */}
           {selectedAcara && (
             <div className="grid grid-cols-5 gap-3 print:gap-2 mb-4">
               <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
                 <p className="text-[11px] text-gray-600 font-semibold leading-tight">Total Generus</p>
                 <p className="text-lg print:text-base font-bold text-gray-900 mt-1">{totalGenerus}</p>
               </div>
+
               <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
                 <p className="text-[11px] text-gray-600 font-semibold leading-tight">Hadir</p>
                 <p className="text-lg print:text-base font-bold text-green-600 mt-1">{totalHadir}</p>
               </div>
+
               <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
                 <p className="text-[11px] text-gray-600 font-semibold leading-tight">Izin</p>
                 <p className="text-lg print:text-base font-bold text-amber-600 mt-1">{totalIzin}</p>
               </div>
+
               <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
                 <p className="text-[11px] text-gray-600 font-semibold leading-tight">Alpa</p>
                 <p className="text-lg print:text-base font-bold text-gray-500 mt-1">{totalAlpa}</p>
               </div>
+
               <div className="bg-white p-3 rounded-xl print:rounded-lg shadow-sm print:shadow-none border border-gray-200 flex flex-col justify-between">
                 <p className="text-[11px] text-gray-600 font-semibold leading-tight">Persentase</p>
                 <p className="text-lg print:text-base font-bold text-blue-600 mt-1">{persentaseHadir}%</p>
@@ -339,7 +390,6 @@ export default function RekapPage() {
             </div>
           )}
 
-          {/* Input Pencarian (Sembunyi saat Cetak) */}
           <div className="bg-white p-3.5 rounded-xl shadow-sm border border-gray-100 relative no-print text-stone-800">
             <Search className="w-4 h-4 absolute left-6 top-6 text-gray-400" />
             <input
@@ -351,7 +401,6 @@ export default function RekapPage() {
             />
           </div>
 
-          {/* Tabel Data Rekap */}
           <div className="bg-white rounded-xl print:rounded-none shadow-sm print:shadow-none border border-gray-100 print:border-none overflow-hidden">
             {!selectedAcara ? (
               <div className="p-8 text-center text-gray-400 text-sm no-print">
@@ -368,30 +417,37 @@ export default function RekapPage() {
                       <th className="p-3 print:p-2 border-gray-200 w-1/4">KELOMPOK / KELAS</th>
                       <th className="p-3 print:p-2 border-gray-200 w-1/5">STATUS KEHADIRAN</th>
                       <th className="p-3 print:p-2 border-gray-200">ALASAN (IZIN / SAKIT)</th>
+                      <th className="p-3 print:p-2 border-gray-200 text-center no-print">METODE</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 print:divide-gray-300">
                     {filteredGenerus.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="p-8 text-center text-gray-400 text-sm">
+                        <td colSpan={5} className="p-8 text-center text-gray-400 text-sm">
                           Tidak ada data generus yang sesuai dengan filter.
                         </td>
                       </tr>
                     ) : (
-                      filteredGenerus.map((g) => {
-                        const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '-' }
+                      filteredGenerus.map((generus) => {
+                        const pData = presensiMap[generus.id] || {
+                          status: 'Alpa / Belum Presensi',
+                          alasan: '-',
+                          metode: '-',
+                        }
 
                         return (
-                          <tr key={g.id} className="hover:bg-gray-50/50 transition">
+                          <tr key={generus.id} className="hover:bg-gray-50/50 transition">
                             <td className="p-3 print:p-2 border-gray-200">
                               <div className="font-bold text-gray-900 uppercase tracking-wide print:text-[11px]">
-                                {g.nama}
+                                {generus.nama}
                               </div>
-                              <div className="text-xs print:text-[10px] text-gray-500 capitalize">{g.jenis_kelamin}</div>
+                              <div className="text-xs print:text-[10px] text-gray-500 capitalize">
+                                {generus.jenis_kelamin}
+                              </div>
                             </td>
                             <td className="p-3 print:p-2 border-gray-200 text-gray-700 font-medium">
-                              <div>{g.kelompok}</div>
-                              <div className="text-xs print:text-[10px] text-gray-500">{g.kelas}</div>
+                              <div>{generus.kelompok}</div>
+                              <div className="text-xs print:text-[10px] text-gray-500">{generus.kelas}</div>
                             </td>
                             <td className="p-3 print:p-2 border-gray-200">
                               <span
@@ -399,8 +455,8 @@ export default function RekapPage() {
                                   pData.status === 'Hadir'
                                     ? 'bg-green-100 print:bg-transparent text-green-700 print:text-gray-900'
                                     : pData.status === 'Izin'
-                                    ? 'bg-amber-100 print:bg-transparent text-amber-700 print:text-gray-900'
-                                    : 'bg-gray-100 print:bg-transparent text-gray-500 print:text-gray-900'
+                                      ? 'bg-amber-100 print:bg-transparent text-amber-700 print:text-gray-900'
+                                      : 'bg-gray-100 print:bg-transparent text-gray-500 print:text-gray-900'
                                 }`}
                               >
                                 {pData.status}
@@ -408,6 +464,9 @@ export default function RekapPage() {
                             </td>
                             <td className="p-3 print:p-2 border-gray-200 text-gray-700 text-xs print:text-[11px]">
                               {pData.alasan}
+                            </td>
+                            <td className="p-3 print:p-2 border-gray-200 text-center text-xs text-gray-400 font-mono no-print">
+                              {pData.metode}
                             </td>
                           </tr>
                         )
