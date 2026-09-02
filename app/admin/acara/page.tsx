@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { 
   Calendar, 
@@ -11,7 +11,10 @@ import {
   UserCheck, 
   X, 
   Check,
-  Search
+  Search,
+  Upload,
+  Image as ImageIcon,
+  Users
 } from 'lucide-react'
 
 interface Acara {
@@ -22,9 +25,23 @@ interface Acara {
   koor: string
 }
 
+interface Generus {
+  id: string
+  nama: string
+  kelompok: string
+}
+
+interface Panitia {
+  generus_id: string
+  jabatan: string | null
+  generus: Generus
+}
+
+type DesignRole = 'participant' | 'panitia'
+
+const supabase = createClient()
+
 export default function AdminAcaraPage() {
-  const supabase = createClient()
-  
   // State Data
   const [acaraList, setAcaraList] = useState<Acara[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,13 +57,21 @@ export default function AdminAcaraPage() {
     lokasi: '',
     koor: ''
   })
+  const [generusList, setGenerusList] = useState<Generus[]>([])
+  const [panitiaList, setPanitiaList] = useState<Panitia[]>([])
+  const [selectedGenerusId, setSelectedGenerusId] = useState('')
+  const [jabatan, setJabatan] = useState('')
+  const [designs, setDesigns] = useState<Record<DesignRole, string | null>>({ participant: null, panitia: null })
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
+  const [settingsError, setSettingsError] = useState('')
 
-  useEffect(() => {
-    fetchAcara()
+  const fetchGenerus = useCallback(async () => {
+    const { data } = await supabase.from('generus').select('id, nama, kelompok').order('nama')
+    if (data) setGenerusList(data as Generus[])
   }, [])
 
   // 1. Fetch Data: Diurutkan dari tanggal terdekat ke terlama (ascending)
-  const fetchAcara = async () => {
+  const fetchAcara = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('acara')
@@ -57,7 +82,27 @@ export default function AdminAcaraPage() {
       setAcaraList(data as Acara[])
     }
     setLoading(false)
-  }
+  }, [])
+
+  useEffect(() => {
+    void (async () => {
+      await Promise.all([fetchAcara(), fetchGenerus()])
+    })()
+  }, [fetchAcara, fetchGenerus])
+
+  useEffect(() => {
+    if (!isModalOpen) return
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsModalOpen(false)
+        setEditingAcara(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [isModalOpen])
 
   // 2. Handler Simpan (Tambah Baru / Edit)
   const handleSaveAcara = async (e: React.FormEvent) => {
@@ -111,6 +156,9 @@ export default function AdminAcaraPage() {
   const openAddModal = () => {
     setEditingAcara(null)
     setFormData({ nama_acara: '', tanggal: '', lokasi: '', koor: '' })
+    setPanitiaList([])
+    setDesigns({ participant: null, panitia: null })
+    setSettingsError('')
     setIsModalOpen(true)
   }
 
@@ -122,7 +170,72 @@ export default function AdminAcaraPage() {
       lokasi: item.lokasi,
       koor: item.koor
     })
+    loadEventSettings(item.id)
     setIsModalOpen(true)
+  }
+
+  const loadEventSettings = async (acaraId: string) => {
+    setIsLoadingSettings(true)
+    setSettingsError('')
+    const [{ data: committee }, { data: designRows, error }] = await Promise.all([
+      supabase.from('acara_panitia').select('generus_id, jabatan, generus(id, nama, kelompok)').eq('acara_id', acaraId),
+      supabase.from('acara_design').select('role, storage_path').eq('acara_id', acaraId)
+    ])
+    if (error) setSettingsError('Pengaturan desain belum tersedia. Jalankan migration Supabase terlebih dahulu.')
+    setPanitiaList((committee || []).map((item) => ({
+      ...item,
+      generus: Array.isArray(item.generus) ? item.generus[0] : item.generus
+    })) as Panitia[])
+    const nextDesigns: Record<DesignRole, string | null> = { participant: null, panitia: null }
+    for (const design of designRows || []) {
+      if (design.role === 'participant' || design.role === 'panitia') {
+        const role = design.role as DesignRole
+        nextDesigns[role] = supabase.storage.from('acara-designs').getPublicUrl(design.storage_path).data.publicUrl
+      }
+    }
+    setDesigns(nextDesigns)
+    setIsLoadingSettings(false)
+  }
+
+  const addPanitia = async () => {
+    if (!editingAcara || !selectedGenerusId) return
+    const { error } = await supabase.from('acara_panitia').upsert({
+      acara_id: editingAcara.id,
+      generus_id: selectedGenerusId,
+      jabatan: jabatan.trim() || null
+    })
+    if (error) return setSettingsError(error.message)
+    setSelectedGenerusId('')
+    setJabatan('')
+    loadEventSettings(editingAcara.id)
+  }
+
+  const removePanitia = async (generusId: string) => {
+    if (!editingAcara) return
+    const { error } = await supabase.from('acara_panitia').delete().eq('acara_id', editingAcara.id).eq('generus_id', generusId)
+    if (error) return setSettingsError(error.message)
+    loadEventSettings(editingAcara.id)
+  }
+
+  const uploadDesign = async (role: DesignRole, file: File) => {
+    if (!editingAcara) return
+    if (!file.type.startsWith('image/')) return setSettingsError('File desain harus berupa gambar.')
+    if (file.size > 5 * 1024 * 1024) return setSettingsError('Ukuran desain maksimal 5 MB.')
+    setSettingsError('')
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `${editingAcara.id}/${role}-${safeFileName}`
+    const { error: uploadError } = await supabase.storage.from('acara-designs').upload(path, file, { upsert: true, contentType: file.type })
+    if (uploadError) return setSettingsError(uploadError.message)
+    const { error: rowError } = await supabase.from('acara_design').upsert({
+      acara_id: editingAcara.id,
+      role,
+      storage_path: path,
+      mime_type: file.type,
+      file_size: file.size,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'acara_id,role' })
+    if (rowError) return setSettingsError(rowError.message)
+    loadEventSettings(editingAcara.id)
   }
 
   const closeModal = () => {
@@ -256,8 +369,8 @@ export default function AdminAcaraPage() {
 
       {/* Modal CRUD (Tambah / Edit Acara) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-slate-900/40 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div className="my-2 max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl transition-all duration-300 ease-out sm:my-0 sm:max-h-[calc(100dvh-2rem)] sm:p-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900">
                 {editingAcara ? 'Edit Acara' : 'Buat Acara Baru'}
@@ -314,6 +427,102 @@ export default function AdminAcaraPage() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              {editingAcara ? (
+                <div className="border-t border-slate-100 pt-4 space-y-4">
+                  <div>
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-blue-600" /> Panitia Acara
+                    </h4>
+                    <div className="mt-2 flex flex-col sm:flex-row gap-2">
+                      <select
+                        value={selectedGenerusId}
+                        onChange={(e) => setSelectedGenerusId(e.target.value)}
+                        className="min-w-0 flex-1 px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Pilih generus</option>
+                        {generusList
+                          .filter((generus) => !panitiaList.some((panitia) => panitia.generus_id === generus.id))
+                          .map((generus) => (
+                            <option key={generus.id} value={generus.id}>
+                              {generus.nama} {generus.kelompok ? `- ${generus.kelompok}` : ''}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        value={jabatan}
+                        onChange={(e) => setJabatan(e.target.value)}
+                        placeholder="Jabatan (opsional)"
+                        className="min-w-0 flex-1 px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={addPanitia}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700"
+                      >
+                        Tambah
+                      </button>
+                    </div>
+                    {isLoadingSettings ? (
+                      <p className="text-xs text-slate-400 mt-2">Memuat pengaturan...</p>
+                    ) : panitiaList.length > 0 ? (
+                      <div className="mt-2 space-y-1.5">
+                        {panitiaList.map((panitia) => (
+                          <div key={panitia.generus_id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                            <span className="truncate text-xs font-semibold text-slate-700">
+                              {panitia.generus?.nama || 'Generus'} {panitia.jabatan ? `- ${panitia.jabatan}` : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removePanitia(panitia.generus_id)}
+                              title="Hapus panitia"
+                              className="shrink-0 p-1 text-red-600 hover:bg-red-50 rounded-lg"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-2">Belum ada panitia yang dipilih.</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-blue-600" /> Desain QR per kategori
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {(['participant', 'panitia'] as DesignRole[]).map((role) => (
+                        <label key={role} className="relative flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-center hover:border-blue-400">
+                          {designs[role] ? (
+                            <div className="absolute inset-0 rounded-xl bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${designs[role]})` }} />
+                          ) : null}
+                          <Upload className="relative z-10 w-4 h-4 text-blue-600" />
+                          <span className="relative z-10 text-xs font-bold text-slate-700">
+                            {role === 'participant' ? 'Twibbon Peserta' : 'Twibbon Panitia'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) uploadDesign(role, file)
+                              e.target.value = ''
+                            }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {settingsError && <p className="text-xs text-red-600">{settingsError}</p>}
+                </div>
+              ) : (
+                <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                  Simpan acara terlebih dahulu untuk mengatur panitia dan desain QR.
+                </p>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button

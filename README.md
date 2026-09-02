@@ -16,6 +16,12 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Pengaturan Panitia dan Desain QR
+
+Jalankan SQL migration `supabase/migrations/202609020001_acara_panitia_design.sql` di Supabase sebelum memakai pengaturan panitia dan desain per acara. Migration tersebut membuat relasi many-to-many `acara_panitia`, tabel `acara_design`, serta bucket Storage `acara-designs`.
+
+Di halaman admin acara, edit acara yang sudah tersimpan untuk memilih panitia dari data `generus`, lalu upload desain peserta dan panitia. Generator QR pada `/qrcode` menggunakan desain sesuai acara dan status panitia; bila belum ada desain per acara, desain browser lama tetap menjadi fallback.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
