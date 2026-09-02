@@ -38,7 +38,7 @@ interface Panitia {
 }
 
 type DesignRole = 'participant' | 'panitia'
-const standardJabatan = ['Wakil Koordinator', 'Acara', 'Perkab', 'Konsumsi', 'PDD', 'KSK']
+const standardJabatan = ['Wakil Koordinator', 'Bendahara', 'Acara', 'Perkab', 'Konsumsi', 'PDD', 'KSK']
 
 const supabase = createClient()
 

@@ -254,7 +254,7 @@ export default function QRCodePage() {
             id="qrcode-acara"
             value={selectedAcaraId}
             onChange={(e) => setSelectedAcaraId(e.target.value)}
-            className="w-full px-3 py-2 border rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border rounded-xl text-xs sm:text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Tanpa acara / desain global</option>
             {acaraList.map((acara) => (
@@ -313,7 +313,7 @@ export default function QRCodePage() {
             placeholder="Cari nama atau kelas generus..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border rounded-lg text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-3 py-2 border rounded-lg text-xs sm:text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         </div>
