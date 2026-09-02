@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft, Search, Download, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Search, Download, Save, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 export default function AdminRekapEditPage() {
@@ -13,7 +13,14 @@ export default function AdminRekapEditPage() {
   const [acaraList, setAcaraList] = useState<any[]>([])
   const [selectedAcara, setSelectedAcara] = useState<string>('')
   const [generusList, setGenerusList] = useState<any[]>([])
+  
+  // State untuk form edit lokal (real-time saat dropdown diubah)
   const [presensiMap, setPresensiMap] = useState<{
+    [key: string]: { status: string; alasan: string; id?: string }
+  }>({})
+
+  // State khusus data tersimpan (untuk menghitung statistik terkonfirmasi)
+  const [savedPresensiMap, setSavedPresensiMap] = useState<{
     [key: string]: { status: string; alasan: string; id?: string }
   }>({})
 
@@ -24,6 +31,7 @@ export default function AdminRekapEditPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [savingAll, setSavingAll] = useState(false)
 
   useEffect(() => {
     fetchAcara()
@@ -36,7 +44,6 @@ export default function AdminRekapEditPage() {
   }, [selectedAcara])
 
   const fetchAcara = async () => {
-    // Urutkan acara dari terdekat (ascending: true)
     const { data } = await supabase
       .from('acara')
       .select('*')
@@ -84,7 +91,10 @@ export default function AdminRekapEditPage() {
           }
         })
       }
-      setPresensiMap(pMap)
+
+      // Sync state lokal dan state terkonfirmasi saat fetch awal
+      setPresensiMap(structuredClone(pMap))
+      setSavedPresensiMap(structuredClone(pMap))
     }
     setLoading(false)
   }
@@ -126,7 +136,7 @@ export default function AdminRekapEditPage() {
         if (error) alert('Gagal menghapus data presensi: ' + error.message)
         else {
           alert('Status dikembalikan ke Alpa / Belum Presensi')
-          fetchRekapData()
+          await fetchRekapData()
         }
       }
     } else {
@@ -142,16 +152,75 @@ export default function AdminRekapEditPage() {
       )
 
       if (error) alert('Gagal menyimpan presensi: ' + error.message)
-      else alert('Berhasil menyimpan data presensi!')
+      else {
+        alert('Berhasil menyimpan data presensi!')
+        await fetchRekapData()
+      }
     }
     setSavingId(null)
   }
 
-  // Logika Filter Data
+  // Fitur Masal: Simpan Semua Perubahan Sekaligus (Mempermudah Edit)
+  const handleSaveAllChanges = async () => {
+    if (!selectedAcara) return alert('Pilih acara terlebih dahulu!')
+    setSavingAll(true)
+
+    try {
+      const upsertList: any[] = []
+      const deleteIds: string[] = []
+
+      Object.entries(presensiMap).forEach(([generusId, item]) => {
+        const savedItem = savedPresensiMap[generusId]
+        
+        // Cek apakah ada perubahan dibanding data tersimpan
+        const isChanged =
+          savedItem?.status !== item.status || savedItem?.alasan !== item.alasan
+
+        if (isChanged) {
+          if (item.status === 'Alpa / Belum Presensi') {
+            if (item.id) deleteIds.push(item.id)
+          } else {
+            upsertList.push({
+              generus_id: generusId,
+              acara_id: selectedAcara,
+              status: item.status,
+              alasan: item.status === 'Izin' ? item.alasan : null,
+              metode: 'Manual Admin',
+            })
+          }
+        }
+      })
+
+      if (upsertList.length === 0 && deleteIds.length === 0) {
+        alert('Tidak ada perubahan data yang perlu disimpan.')
+        setSavingAll(false)
+        return
+      }
+
+      if (deleteIds.length > 0) {
+        await supabase.from('presensi').delete().in('id', deleteIds)
+      }
+
+      if (upsertList.length > 0) {
+        await supabase.from('presensi').upsert(upsertList, {
+          onConflict: 'generus_id, acara_id',
+        })
+      }
+
+      alert('Semua perubahan berhasil disimpan!')
+      await fetchRekapData()
+    } catch (err: any) {
+      alert('Gagal menyimpan semua perubahan: ' + err.message)
+    } finally {
+      setSavingAll(false)
+    }
+  }
+
+  // Logika Filter Data (Menggunakan savedPresensiMap agar data filter stabil berdasar data tersimpan)
   const filteredGenerus = generusList.filter((g) => {
     const matchKelompok = selectedKelompok === 'Semua' || g.kelompok === selectedKelompok
     const matchJK = selectedJK === 'Semua' || g.jenis_kelamin === selectedJK
-    const currentStatus = presensiMap[g.id]?.status || 'Alpa / Belum Presensi'
+    const currentStatus = savedPresensiMap[g.id]?.status || 'Alpa / Belum Presensi'
     const matchStatus = selectedStatus === 'Semua' || currentStatus === selectedStatus
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -160,14 +229,14 @@ export default function AdminRekapEditPage() {
     return matchKelompok && matchJK && matchStatus && matchSearch
   })
 
-  // Hitung Statistik Presensi
+  // Hitung Statistik Presensi HANYA dari savedPresensiMap (Data Tersimpan)
   const totalGenerus = filteredGenerus.length
   let totalHadir = 0
   let totalIzin = 0
   let totalAlpa = 0
 
   filteredGenerus.forEach((g) => {
-    const st = presensiMap[g.id]?.status
+    const st = savedPresensiMap[g.id]?.status
     if (st === 'Hadir') totalHadir++
     else if (st === 'Izin') totalIzin++
     else totalAlpa++
@@ -175,7 +244,6 @@ export default function AdminRekapEditPage() {
 
   const persentaseHadir = totalGenerus > 0 ? ((totalHadir / totalGenerus) * 100).toFixed(1) : '0'
 
-  // Menggunakan currentAcaraInfo untuk export agar tidak unused
   const currentAcaraInfo = acaraList.find((a) => a.id === selectedAcara)
 
   // Fitur Export ke Excel
@@ -187,7 +255,7 @@ export default function AdminRekapEditPage() {
       : 'Acara'
 
     const exportData = filteredGenerus.map((g, index) => {
-      const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '' }
+      const pData = savedPresensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '' }
       return {
         No: index + 1,
         'Nama Lengkap': g.nama,
@@ -203,7 +271,7 @@ export default function AdminRekapEditPage() {
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Presensi')
 
-    const max_width = exportData.reduce((w, r) => Math.max(w, r['Nama Lengkap'].length), 10)
+    const max_width = exportData.reduce((w, r) => Math.max(w, (r['Nama Lengkap'] || '').length), 10)
     worksheet['!cols'] = [
       { wch: 5 },
       { wch: max_width + 5 },
@@ -241,12 +309,22 @@ export default function AdminRekapEditPage() {
             </div>
 
             {selectedAcara && (
-              <button
-                onClick={handleExportExcel}
-                className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 cursor-pointer w-fit"
-              >
-                <Download className="w-4 h-4" /> Export Excel
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveAllChanges}
+                  disabled={savingAll}
+                  className="px-3.5 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingAll ? 'Menyimpan...' : 'Simpan Semua Perubahan'}
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  className="px-3.5 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" /> Export Excel
+                </button>
+              </div>
             )}
           </div>
 
@@ -312,7 +390,7 @@ export default function AdminRekapEditPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards (Hanya Terpengaruh Data Tersimpan) */}
         {selectedAcara && (
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div className="bg-white p-3.5 rounded-xl border border-gray-100">
@@ -380,12 +458,19 @@ export default function AdminRekapEditPage() {
                   ) : (
                     filteredGenerus.map((g) => {
                       const pData = presensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '' }
+                      const savedData = savedPresensiMap[g.id] || { status: 'Alpa / Belum Presensi', alasan: '' }
+                      const isEdited = pData.status !== savedData.status || pData.alasan !== savedData.alasan
 
                       return (
-                        <tr key={g.id} className="hover:bg-gray-50/50 transition">
+                        <tr key={g.id} className={`hover:bg-gray-50/50 transition ${isEdited ? 'bg-amber-50/40' : ''}`}>
                           <td className="p-3">
-                            <div className="font-bold text-gray-900 uppercase tracking-wide">
+                            <div className="font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
                               {g.nama}
+                              {isEdited && (
+                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-300 font-normal capitalize">
+                                  Belum Disimpan
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-gray-500 capitalize">{g.jenis_kelamin}</div>
                           </td>
