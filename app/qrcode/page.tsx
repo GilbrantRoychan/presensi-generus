@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { QRCodeSVG } from 'qrcode.react'
 import { toPng, toJpeg } from 'html-to-image'
 import JSZip from 'jszip'
-import { ArrowLeft, Search, Download, Folder, Users, Image as ImageIcon, Sparkles } from 'lucide-react'
+import { ArrowLeft, Search, Download, Folder, Users, Image as ImageIcon, Sparkles, Upload, X } from 'lucide-react'
 
 // Interface untuk data Generus
 interface Generus {
@@ -19,6 +20,20 @@ interface Generus {
 }
 
 const supabase = createClient()
+const QR_DESIGN_STORAGE_KEY = 'qrcode-card-design'
+const DESIGN_CHANGE_EVENT = 'qrcode-design-change'
+
+const subscribeToDesign = (onChange: () => void) => {
+  window.addEventListener('storage', onChange)
+  window.addEventListener(DESIGN_CHANGE_EVENT, onChange)
+  return () => {
+    window.removeEventListener('storage', onChange)
+    window.removeEventListener(DESIGN_CHANGE_EVENT, onChange)
+  }
+}
+
+const getStoredDesign = () => localStorage.getItem(QR_DESIGN_STORAGE_KEY)
+const getServerDesign = () => null
 
 export default function QRCodePage() {
   const [generusList, setGenerusList] = useState<Generus[]>([])
@@ -27,6 +42,8 @@ export default function QRCodePage() {
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg'>('png')
   const [downloadingZip, setDownloadingZip] = useState(false)
   const [loading, setLoading] = useState(true)
+  const designImage = useSyncExternalStore(subscribeToDesign, getStoredDesign, getServerDesign)
+  const [designError, setDesignError] = useState('')
 
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
@@ -47,6 +64,37 @@ export default function QRCodePage() {
 
     loadGenerus()
   }, [])
+
+  const handleDesignUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setDesignError('File harus berupa gambar.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = String(reader.result)
+      try {
+        localStorage.setItem(QR_DESIGN_STORAGE_KEY, dataUrl)
+        window.dispatchEvent(new Event(DESIGN_CHANGE_EVENT))
+        setDesignError('')
+      } catch {
+        setDesignError('Gambar terlalu besar untuk disimpan di browser.')
+      }
+    }
+    reader.onerror = () => setDesignError('Gambar gagal dibaca.')
+    reader.readAsDataURL(file)
+  }
+
+  const removeDesign = () => {
+    localStorage.removeItem(QR_DESIGN_STORAGE_KEY)
+    window.dispatchEvent(new Event(DESIGN_CHANGE_EVENT))
+    setDesignError('')
+  }
 
   const kelompokList = Array.from(new Set(generusList.map((g: Generus) => g.kelompok || 'Lainnya'))).sort()
 
@@ -175,6 +223,35 @@ export default function QRCodePage() {
         </div>
         </div>
 
+        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex-1">
+            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-blue-600" /> Desain Twibbon / Name Tag
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Upload gambar desain untuk mengganti latar kartu QR. Desain akan ikut tampil pada file hasil download.
+            </p>
+            {designError && <p className="text-xs text-red-600 mt-2">{designError}</p>}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <label className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+              <Upload className="w-4 h-4" />
+              {designImage ? 'Ganti Desain' : 'Upload Desain'}
+              <input type="file" accept="image/*" onChange={handleDesignUpload} className="sr-only" />
+            </label>
+            {designImage && (
+              <button
+                type="button"
+                onClick={removeDesign}
+                title="Hapus desain upload"
+                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="space-y-4">
         <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-700 bg-slate-800/80 p-2 pb-3 scrollbar-none">
           <button
@@ -260,29 +337,69 @@ export default function QRCodePage() {
                       ref={(el) => {
                         cardRefs.current[g.id] = el
                       }}
-                      className="w-full max-w-55 bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center text-center space-y-3"
+                      className={`relative isolate w-full max-w-55 overflow-hidden border border-gray-200 shadow-sm ${
+                        designImage
+                          ? 'aspect-[990/1600] border-0 bg-transparent shadow-none'
+                          : 'bg-white p-4 sm:p-5 rounded-2xl flex flex-col items-center text-center space-y-3'
+                      }`}
                     >
-                      <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-extrabold uppercase tracking-widest border border-blue-100">
-                        {g.kelompok || 'GENERUS'}
-                      </span>
+                      {designImage ? (
+                        <>
+                          <div className="absolute left-[15%] top-[35.6%] z-20 h-[calc(55%+16px)] w-[70%] overflow-hidden rounded-[8%] bg-white p-2 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
+                            <p className="absolute left-[5%] top-[6%] w-[90%] truncate text-center text-[clamp(8px,2.4vw,14px)] font-extrabold uppercase leading-none text-blue-700">
+                              {g.kelompok || 'GENERUS'}
+                            </p>
+                            <div className="absolute left-[18.5%] top-[19%] flex aspect-square w-[63%] items-center justify-center rounded-[5%] bg-white p-[3%] shadow-[0_1px_8px_rgba(0,0,0,0.1)]">
+                              <QRCodeSVG
+                                value={g.qr_code_id || g.id}
+                                size={1000}
+                                level="H"
+                                includeMargin={false}
+                                style={{ width: '100%', height: '100%' }}
+                              />
+                            </div>
+                            <div className="absolute left-[5%] top-[72.5%] w-[90%] text-center opacity-100">
+                              <p className="line-clamp-2 text-[clamp(8px,2.4vw,14px)] font-extrabold uppercase leading-tight text-black">
+                                {g.nama}
+                              </p>
+                              <p className="truncate text-[clamp(6px,1.6vw,10px)] font-semibold leading-none text-gray-500">
+                                {g.kelas ? `Kelas ${g.kelas}` : '-'} {g.jenis_kelamin ? `• ${g.jenis_kelamin}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <Image
+                            src={designImage}
+                            alt="Desain name tag"
+                            fill
+                            unoptimized
+                            className="z-0 object-cover"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <span className="relative z-10 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-extrabold uppercase tracking-widest border border-blue-100">
+                            {g.kelompok || 'GENERUS'}
+                          </span>
 
-                      <div className="p-2.5 bg-white border border-gray-100 rounded-xl shadow-inner">
-                        <QRCodeSVG
-                          value={g.qr_code_id || g.id}
-                          size={135}
-                          level="H"
-                          includeMargin={false}
-                        />
-                      </div>
+                          <div className="relative z-10 p-2.5 bg-white border border-gray-100 rounded-xl shadow-inner">
+                            <QRCodeSVG
+                              value={g.qr_code_id || g.id}
+                              size={135}
+                              level="H"
+                              includeMargin={false}
+                            />
+                          </div>
 
-                      <div className="w-full space-y-0.5 pt-1">
-                        <h3 className="font-extrabold text-gray-900 text-base leading-tight tracking-tight line-clamp-2 uppercase">
-                          {g.nama}
-                        </h3>
-                        <p className="text-xs font-semibold text-gray-500">
-                          {g.kelas ? `Kelas ${g.kelas}` : '-'} {g.jenis_kelamin ? `• ${g.jenis_kelamin}` : ''}
-                        </p>
-                      </div>
+                          <div className="relative z-10 w-full space-y-0.5 pt-1">
+                            <h3 className="font-extrabold text-gray-900 text-base leading-tight tracking-tight line-clamp-2 uppercase">
+                              {g.nama}
+                            </h3>
+                            <p className="text-xs font-semibold text-gray-500">
+                              {g.kelas ? `Kelas ${g.kelas}` : '-'} {g.jenis_kelamin ? `• ${g.jenis_kelamin}` : ''}
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Menggunakan Tailwind v4 `max-w-55` */}
