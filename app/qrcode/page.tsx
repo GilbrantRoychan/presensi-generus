@@ -19,6 +19,14 @@ interface Generus {
   jenis_kelamin?: string
 }
 
+interface Acara {
+  id: string
+  nama_acara: string
+  tanggal: string
+}
+
+type DesignRole = 'participant' | 'panitia'
+
 const supabase = createClient()
 const QR_DESIGN_STORAGE_KEY = 'qrcode-card-design'
 const DESIGN_CHANGE_EVENT = 'qrcode-design-change'
@@ -44,6 +52,11 @@ export default function QRCodePage() {
   const [loading, setLoading] = useState(true)
   const designImage = useSyncExternalStore(subscribeToDesign, getStoredDesign, getServerDesign)
   const [designError, setDesignError] = useState('')
+  const [acaraList, setAcaraList] = useState<Acara[]>([])
+  const [selectedAcaraId, setSelectedAcaraId] = useState('')
+  const [panitiaIds, setPanitiaIds] = useState<Set<string>>(new Set())
+  const [eventDesigns, setEventDesigns] = useState<Record<DesignRole, string | null>>({ participant: null, panitia: null })
+  const [eventSettingsError, setEventSettingsError] = useState('')
 
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
@@ -64,6 +77,45 @@ export default function QRCodePage() {
 
     loadGenerus()
   }, [])
+
+  useEffect(() => {
+    const loadAcara = async () => {
+      const { data } = await supabase.from('acara').select('id, nama_acara, tanggal').order('tanggal', { ascending: false })
+      if (data) {
+        setAcaraList(data as Acara[])
+        if (data.length > 0) setSelectedAcaraId(data[0].id)
+      }
+    }
+    loadAcara()
+  }, [])
+
+  useEffect(() => {
+    if (!selectedAcaraId) {
+      return
+    }
+
+    const loadEventSettings = async () => {
+      setEventSettingsError('')
+      const [{ data: committee, error: committeeError }, { data: designRows, error: designError }] = await Promise.all([
+        supabase.from('acara_panitia').select('generus_id').eq('acara_id', selectedAcaraId),
+        supabase.from('acara_design').select('role, storage_path').eq('acara_id', selectedAcaraId)
+      ])
+      if (committeeError || designError) {
+        setEventSettingsError('Pengaturan acara belum tersedia. Jalankan migration Supabase terlebih dahulu.')
+        return
+      }
+      setPanitiaIds(new Set((committee || []).map((item) => item.generus_id)))
+      const nextDesigns: Record<DesignRole, string | null> = { participant: null, panitia: null }
+      for (const design of designRows || []) {
+        if (design.role === 'participant' || design.role === 'panitia') {
+          const role = design.role as DesignRole
+          nextDesigns[role] = supabase.storage.from('acara-designs').getPublicUrl(design.storage_path).data.publicUrl
+        }
+      }
+      setEventDesigns(nextDesigns)
+    }
+    loadEventSettings()
+  }, [selectedAcaraId])
 
   const handleDesignUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -94,6 +146,12 @@ export default function QRCodePage() {
     localStorage.removeItem(QR_DESIGN_STORAGE_KEY)
     window.dispatchEvent(new Event(DESIGN_CHANGE_EVENT))
     setDesignError('')
+  }
+
+  const getDesignForGenerus = (generusId: string) => {
+    if (!selectedAcaraId) return designImage
+    const role: DesignRole = panitiaIds.has(generusId) ? 'panitia' : 'participant'
+    return eventDesigns[role] || designImage
   }
 
   const kelompokList = Array.from(new Set(generusList.map((g: Generus) => g.kelompok || 'Lainnya'))).sort()
@@ -223,6 +281,22 @@ export default function QRCodePage() {
         </div>
         </div>
 
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          <label htmlFor="qrcode-acara" className="block text-xs font-bold text-gray-700 mb-2">Acara QR Code</label>
+          <select
+            id="qrcode-acara"
+            value={selectedAcaraId}
+            onChange={(e) => setSelectedAcaraId(e.target.value)}
+            className="w-full px-3 py-2 border rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Tanpa acara / desain global</option>
+            {acaraList.map((acara) => (
+              <option key={acara.id} value={acara.id}>{acara.nama_acara} - {acara.tanggal}</option>
+            ))}
+          </select>
+          {eventSettingsError && <p className="text-xs text-amber-600 mt-2">{eventSettingsError}</p>}
+        </div>
+
         <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex-1">
             <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
@@ -338,12 +412,12 @@ export default function QRCodePage() {
                         cardRefs.current[g.id] = el
                       }}
                       className={`relative isolate w-full max-w-55 overflow-hidden border border-gray-200 shadow-sm ${
-                        designImage
+                        getDesignForGenerus(g.id)
                           ? 'aspect-[990/1600] border-0 bg-transparent shadow-none'
                           : 'bg-white p-4 sm:p-5 rounded-2xl flex flex-col items-center text-center space-y-3'
                       }`}
                     >
-                      {designImage ? (
+                      {getDesignForGenerus(g.id) ? (
                         <>
                           <div className="absolute left-[15%] top-[35.6%] z-20 h-[calc(55%+16px)] w-[70%] overflow-hidden rounded-[8%] bg-white p-2 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
                             <p className="absolute left-[5%] top-[6%] w-[90%] truncate text-center text-[clamp(8px,2.4vw,14px)] font-extrabold uppercase leading-none text-blue-700">
@@ -368,7 +442,7 @@ export default function QRCodePage() {
                             </div>
                           </div>
                           <Image
-                            src={designImage}
+                            src={getDesignForGenerus(g.id) as string}
                             alt="Desain name tag"
                             fill
                             unoptimized
