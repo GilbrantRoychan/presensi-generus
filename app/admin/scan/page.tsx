@@ -224,6 +224,22 @@ export default function AdminScanPage() {
       }
     }
 
+    if (!gen) {
+      const manualPanitiaResult = await supabase
+        .from('acara_panitia')
+        .select('nama_manual')
+        .eq('id', candidates[0] || '')
+        .eq('acara_id', selectedAcara)
+        .is('generus_id', null)
+        .maybeSingle()
+
+      if (manualPanitiaResult.data?.nama_manual) {
+        showToast('Panitia Non Generus tidak perlu scan. Data ini tidak masuk rekap.', 'error')
+        setTimeout(() => { isProcessing.current = false }, 2500)
+        return
+      }
+    }
+
     if (lookupError || !gen) {
       showToast(`Kode QR (${candidates[0] || rawCode.trim()}) tidak ditemukan!`, 'error')
     } else {

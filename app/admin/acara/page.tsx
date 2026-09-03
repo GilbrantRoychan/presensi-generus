@@ -32,9 +32,11 @@ interface Generus {
 }
 
 interface Panitia {
-  generus_id: string
-  jabatan: string | null
-  generus: Generus
+  id: string
+  generus_id: string | null
+  nama_manual: string | null
+  jabatan: string
+  generus?: Generus | null
 }
 
 type DesignRole = 'participant' | 'panitia'
@@ -60,7 +62,9 @@ export default function AdminAcaraPage() {
   })
   const [generusList, setGenerusList] = useState<Generus[]>([])
   const [panitiaList, setPanitiaList] = useState<Panitia[]>([])
+  const [panitiaType, setPanitiaType] = useState<'generus' | 'manual'>('generus')
   const [selectedGenerusId, setSelectedGenerusId] = useState('')
+  const [namaManual, setNamaManual] = useState('')
   const [jabatan, setJabatan] = useState('')
   const [jabatanPilihan, setJabatanPilihan] = useState('')
   const [designs, setDesigns] = useState<Record<DesignRole, string | null>>({ participant: null, panitia: null })
@@ -160,6 +164,9 @@ export default function AdminAcaraPage() {
     setEditingAcara(null)
     setFormData({ nama_acara: '', tanggal: '', lokasi: '', koor: '' })
     setPanitiaList([])
+    setPanitiaType('generus')
+    setSelectedGenerusId('')
+    setNamaManual('')
     setJabatan('')
     setJabatanPilihan('')
     setDesigns({ participant: null, panitia: null })
@@ -186,11 +193,11 @@ export default function AdminAcaraPage() {
   const loadEventSettings = async (acaraId: string) => {
     setIsLoadingSettings(true)
     setSettingsError('')
-    const [{ data: committee }, { data: designRows, error }] = await Promise.all([
-      supabase.from('acara_panitia').select('generus_id, jabatan, generus(id, nama, kelompok)').eq('acara_id', acaraId),
+    const [{ data: committee, error: committeeError }, { data: designRows, error }] = await Promise.all([
+      supabase.from('acara_panitia').select('id, generus_id, nama_manual, jabatan, generus(id, nama, kelompok)').eq('acara_id', acaraId),
       supabase.from('acara_design').select('role, storage_path').eq('acara_id', acaraId)
     ])
-    if (error) setSettingsError('Pengaturan desain belum tersedia. Jalankan migration Supabase terlebih dahulu.')
+    if (committeeError || error) setSettingsError('Pengaturan acara belum tersedia. Jalankan migration Supabase terlebih dahulu.')
     setPanitiaList((committee || []).map((item) => ({
       ...item,
       generus: Array.isArray(item.generus) ? item.generus[0] : item.generus
@@ -207,25 +214,44 @@ export default function AdminAcaraPage() {
   }
 
   const addPanitia = async () => {
-    if (!editingAcara || !selectedGenerusId) return
-    if (!jabatan.trim()) return setSettingsError('Pilih atau isi jabatan panitia terlebih dahulu.')
-    const { error } = await supabase.from('acara_panitia').upsert({
+    if (!editingAcara) return
+    const normalizedJabatan = jabatan.trim()
+    if (!normalizedJabatan) return setSettingsError('Pilih atau isi jabatan panitia terlebih dahulu.')
+
+    const normalizedNama = namaManual.trim()
+    if (panitiaType === 'generus' && !selectedGenerusId) {
+      return setSettingsError('Pilih generus yang akan menjadi panitia.')
+    }
+    if (panitiaType === 'manual' && !normalizedNama) {
+      return setSettingsError('Masukkan nama panitia manual.')
+    }
+    if (
+      panitiaType === 'manual' &&
+      panitiaList.some((panitia) => panitia.nama_manual?.trim().toLowerCase() === normalizedNama.toLowerCase())
+    ) {
+      return setSettingsError('Nama panitia tersebut sudah terdaftar dalam acara ini.')
+    }
+
+    const { error } = await supabase.from('acara_panitia').insert({
       acara_id: editingAcara.id,
-      generus_id: selectedGenerusId,
-      jabatan: jabatan.trim() || null
+      generus_id: panitiaType === 'generus' ? selectedGenerusId : null,
+      nama_manual: panitiaType === 'manual' ? normalizedNama : null,
+      jabatan: normalizedJabatan
     })
     if (error) return setSettingsError(error.message)
     setSelectedGenerusId('')
+    setNamaManual('')
     setJabatan('')
     setJabatanPilihan('')
-    loadEventSettings(editingAcara.id)
+    setSettingsError('')
+    await loadEventSettings(editingAcara.id)
   }
 
-  const removePanitia = async (generusId: string) => {
+  const removePanitia = async (panitiaId: string) => {
     if (!editingAcara) return
-    const { error } = await supabase.from('acara_panitia').delete().eq('acara_id', editingAcara.id).eq('generus_id', generusId)
+    const { error } = await supabase.from('acara_panitia').delete().eq('acara_id', editingAcara.id).eq('id', panitiaId)
     if (error) return setSettingsError(error.message)
-    loadEventSettings(editingAcara.id)
+    await loadEventSettings(editingAcara.id)
   }
 
   const uploadDesign = async (role: DesignRole, file: File) => {
@@ -489,6 +515,19 @@ export default function AdminAcaraPage() {
                     </h4>
                     <div className="mt-2 flex flex-col sm:flex-row gap-2">
                       <select
+                        value={panitiaType}
+                        onChange={(e) => {
+                          setPanitiaType(e.target.value as 'generus' | 'manual')
+                          setSelectedGenerusId('')
+                          setNamaManual('')
+                        }}
+                        className="w-full sm:w-32 px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="generus">Generus</option>
+                        <option value="manual">Manual</option>
+                      </select>
+                      {panitiaType === 'generus' ? (
+                        <select
                         value={selectedGenerusId}
                         onChange={(e) => setSelectedGenerusId(e.target.value)}
                         className="min-w-0 flex-1 px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
@@ -501,7 +540,15 @@ export default function AdminAcaraPage() {
                               {generus.nama} {generus.kelompok ? `- ${generus.kelompok}` : ''}
                             </option>
                           ))}
-                      </select>
+                        </select>
+                      ) : (
+                        <input
+                          value={namaManual}
+                          onChange={(e) => setNamaManual(e.target.value)}
+                          placeholder="Nama panitia non-generus"
+                          className="min-w-0 flex-1 px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
                       <div className="min-w-0 flex-1 space-y-2">
                         <select
                           value={jabatanPilihan}
@@ -540,13 +587,13 @@ export default function AdminAcaraPage() {
                     ) : panitiaList.length > 0 ? (
                       <div className="mt-2 space-y-1.5">
                         {panitiaList.map((panitia) => (
-                          <div key={panitia.generus_id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                          <div key={panitia.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2">
                             <span className="truncate text-xs font-semibold text-slate-700">
-                              {panitia.generus?.nama || 'Generus'} {panitia.jabatan ? `- ${panitia.jabatan}` : ''}
+                              {panitia.generus?.nama || panitia.nama_manual || 'Panitia'} - {panitia.jabatan}
                             </span>
                             <button
                               type="button"
-                              onClick={() => removePanitia(panitia.generus_id)}
+                              onClick={() => removePanitia(panitia.id)}
                               title="Hapus panitia"
                               className="shrink-0 p-1 text-red-600 hover:bg-red-50 rounded-lg"
                             >
