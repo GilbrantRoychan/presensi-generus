@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Image from 'next/image'
 import { QRCodeSVG } from 'qrcode.react'
 import { toPng, toJpeg } from 'html-to-image'
 import JSZip from 'jszip'
-import { ArrowLeft, Search, Download, Folder, Users, Image as ImageIcon, Sparkles, Upload, X } from 'lucide-react'
+import { ArrowLeft, Search, Download, Folder, Users, Image as ImageIcon, Sparkles } from 'lucide-react'
 
 // Interface untuk data Generus
 interface Generus {
@@ -28,20 +28,6 @@ interface Acara {
 type DesignRole = 'participant' | 'panitia'
 
 const supabase = createClient()
-const QR_DESIGN_STORAGE_KEY = 'qrcode-card-design'
-const DESIGN_CHANGE_EVENT = 'qrcode-design-change'
-
-const subscribeToDesign = (onChange: () => void) => {
-  window.addEventListener('storage', onChange)
-  window.addEventListener(DESIGN_CHANGE_EVENT, onChange)
-  return () => {
-    window.removeEventListener('storage', onChange)
-    window.removeEventListener(DESIGN_CHANGE_EVENT, onChange)
-  }
-}
-
-const getStoredDesign = () => localStorage.getItem(QR_DESIGN_STORAGE_KEY)
-const getServerDesign = () => null
 
 export default function QRCodePage() {
   const [generusList, setGenerusList] = useState<Generus[]>([])
@@ -50,12 +36,12 @@ export default function QRCodePage() {
   const [downloadFormat, setDownloadFormat] = useState<'png' | 'jpg'>('png')
   const [downloadingZip, setDownloadingZip] = useState(false)
   const [loading, setLoading] = useState(true)
-  const designImage = useSyncExternalStore(subscribeToDesign, getStoredDesign, getServerDesign)
-  const [designError, setDesignError] = useState('')
   const [acaraList, setAcaraList] = useState<Acara[]>([])
   const [selectedAcaraId, setSelectedAcaraId] = useState('')
   const [panitiaIds, setPanitiaIds] = useState<Set<string>>(new Set())
-  const [eventDesigns, setEventDesigns] = useState<Record<DesignRole, string | null>>({ participant: null, panitia: null })
+  const [panitiaDesign, setPanitiaDesign] = useState<string | null>(null)
+  const [participantDesign, setParticipantDesign] = useState<string | null>(null)
+  const [eventSettingsLoading, setEventSettingsLoading] = useState(false)
   const [eventSettingsError, setEventSettingsError] = useState('')
 
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
@@ -90,18 +76,28 @@ export default function QRCodePage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedAcaraId) {
-      return
-    }
-
     const loadEventSettings = async () => {
+      if (!selectedAcaraId) {
+        setPanitiaIds(new Set())
+        setPanitiaDesign(null)
+        setParticipantDesign(null)
+        setEventSettingsError('')
+        setEventSettingsLoading(false)
+        return
+      }
+
+      setEventSettingsLoading(true)
       setEventSettingsError('')
       const [{ data: committee, error: committeeError }, { data: designRows, error: designError }] = await Promise.all([
         supabase.from('acara_panitia').select('generus_id').eq('acara_id', selectedAcaraId),
         supabase.from('acara_design').select('role, storage_path').eq('acara_id', selectedAcaraId)
       ])
       if (committeeError || designError) {
+        setPanitiaIds(new Set())
+        setPanitiaDesign(null)
+        setParticipantDesign(null)
         setEventSettingsError('Pengaturan acara belum tersedia. Jalankan migration Supabase terlebih dahulu.')
+        setEventSettingsLoading(false)
         return
       }
       setPanitiaIds(new Set((committee || []).map((item) => item.generus_id)))
@@ -112,56 +108,27 @@ export default function QRCodePage() {
           nextDesigns[role] = supabase.storage.from('acara-designs').getPublicUrl(design.storage_path).data.publicUrl
         }
       }
-      setEventDesigns(nextDesigns)
+      setParticipantDesign(nextDesigns.participant)
+      setPanitiaDesign(nextDesigns.panitia)
+      setEventSettingsLoading(false)
     }
     loadEventSettings()
   }, [selectedAcaraId])
 
-  const handleDesignUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-
-    if (!file.type.startsWith('image/')) {
-      setDesignError('File harus berupa gambar.')
-      return
-    }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = String(reader.result)
-      try {
-        localStorage.setItem(QR_DESIGN_STORAGE_KEY, dataUrl)
-        window.dispatchEvent(new Event(DESIGN_CHANGE_EVENT))
-        setDesignError('')
-      } catch {
-        setDesignError('Gambar terlalu besar untuk disimpan di browser.')
-      }
-    }
-    reader.onerror = () => setDesignError('Gambar gagal dibaca.')
-    reader.readAsDataURL(file)
-  }
-
-  const removeDesign = () => {
-    localStorage.removeItem(QR_DESIGN_STORAGE_KEY)
-    window.dispatchEvent(new Event(DESIGN_CHANGE_EVENT))
-    setDesignError('')
-  }
-
   const getDesignForGenerus = (generusId: string) => {
-    if (!selectedAcaraId) return designImage
-    const role: DesignRole = panitiaIds.has(generusId) ? 'panitia' : 'participant'
-    return eventDesigns[role] || designImage
+    if (!selectedAcaraId) return null
+    return panitiaIds.has(generusId) ? panitiaDesign : participantDesign
   }
 
   const kelompokList = Array.from(new Set(generusList.map((g: Generus) => g.kelompok || 'Lainnya'))).sort()
 
   const filteredGenerus = generusList.filter((g: Generus) => {
-    const matchKelompok = activeKelompok === 'Semua' || (g.kelompok || 'Lainnya') === activeKelompok
+    const matchPanitia = activeKelompok !== 'Panitia' || panitiaIds.has(g.id)
+    const matchKelompok = activeKelompok === 'Semua' || activeKelompok === 'Panitia' || (g.kelompok || 'Lainnya') === activeKelompok
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (g.kelas && g.kelas.toLowerCase().includes(searchQuery.toLowerCase()))
-    return matchKelompok && matchSearch
+    return matchPanitia && matchKelompok && matchSearch
   })
 
   // Pengelompokan data terstruktur dengan tipe Record<string, Generus[]>
@@ -287,7 +254,7 @@ export default function QRCodePage() {
             id="qrcode-acara"
             value={selectedAcaraId}
             onChange={(e) => setSelectedAcaraId(e.target.value)}
-            className="w-full px-3 py-2 border rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border rounded-xl text-xs sm:text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Tanpa acara / desain global</option>
             {acaraList.map((acara) => (
@@ -295,35 +262,6 @@ export default function QRCodePage() {
             ))}
           </select>
           {eventSettingsError && <p className="text-xs text-amber-600 mt-2">{eventSettingsError}</p>}
-        </div>
-
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-              <ImageIcon className="w-4 h-4 text-blue-600" /> Desain Twibbon / Name Tag
-            </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              Upload gambar desain untuk mengganti latar kartu QR. Desain akan ikut tampil pada file hasil download.
-            </p>
-            {designError && <p className="text-xs text-red-600 mt-2">{designError}</p>}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <label className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
-              <Upload className="w-4 h-4" />
-              {designImage ? 'Ganti Desain' : 'Upload Desain'}
-              <input type="file" accept="image/*" onChange={handleDesignUpload} className="sr-only" />
-            </label>
-            {designImage && (
-              <button
-                type="button"
-                onClick={removeDesign}
-                title="Hapus desain upload"
-                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
         </div>
 
         <div className="space-y-4">
@@ -337,6 +275,17 @@ export default function QRCodePage() {
             }`}
           >
             <Users className="w-4 h-4" /> Semua Kelompok ({generusList.length})
+          </button>
+
+          <button
+            onClick={() => setActiveKelompok('Panitia')}
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition flex items-center gap-2 cursor-pointer ${
+              activeKelompok === 'Panitia'
+                ? 'bg-emerald-600 text-white border border-emerald-400'
+                : 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
+            }`}
+          >
+            <Users className="w-4 h-4 text-emerald-400" /> Panitia ({panitiaIds.size})
           </button>
 
           {kelompokList.map((kel) => {
@@ -364,12 +313,12 @@ export default function QRCodePage() {
             placeholder="Cari nama atau kelas generus..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border rounded-lg text-xs sm:text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-9 pr-3 py-2 border rounded-lg text-xs sm:text-sm text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         </div>
 
-        {loading ? (
+        {loading || eventSettingsLoading ? (
         <div className="bg-white p-12 text-center rounded-2xl text-gray-400 text-sm">
           Memuat data QR Code...
         </div>
