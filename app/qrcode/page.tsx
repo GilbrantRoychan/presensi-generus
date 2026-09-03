@@ -17,6 +17,13 @@ interface Generus {
   kelompok: string
   kelas?: string
   jenis_kelamin?: string
+  jabatan?: string
+}
+
+interface ManualPanitia {
+  id: string
+  nama_manual: string
+  jabatan: string
 }
 
 interface Acara {
@@ -38,7 +45,8 @@ export default function QRCodePage() {
   const [loading, setLoading] = useState(true)
   const [acaraList, setAcaraList] = useState<Acara[]>([])
   const [selectedAcaraId, setSelectedAcaraId] = useState('')
-  const [panitiaIds, setPanitiaIds] = useState<Set<string>>(new Set())
+  const [panitiaJabatan, setPanitiaJabatan] = useState<Map<string, string>>(new Map())
+  const [manualPanitia, setManualPanitia] = useState<ManualPanitia[]>([])
   const [panitiaDesign, setPanitiaDesign] = useState<string | null>(null)
   const [participantDesign, setParticipantDesign] = useState<string | null>(null)
   const [eventSettingsLoading, setEventSettingsLoading] = useState(false)
@@ -78,7 +86,8 @@ export default function QRCodePage() {
   useEffect(() => {
     const loadEventSettings = async () => {
       if (!selectedAcaraId) {
-        setPanitiaIds(new Set())
+        setPanitiaJabatan(new Map())
+        setManualPanitia([])
         setPanitiaDesign(null)
         setParticipantDesign(null)
         setEventSettingsError('')
@@ -89,18 +98,35 @@ export default function QRCodePage() {
       setEventSettingsLoading(true)
       setEventSettingsError('')
       const [{ data: committee, error: committeeError }, { data: designRows, error: designError }] = await Promise.all([
-        supabase.from('acara_panitia').select('generus_id').eq('acara_id', selectedAcaraId),
+        supabase.from('acara_panitia').select('id, generus_id, nama_manual, jabatan').eq('acara_id', selectedAcaraId),
         supabase.from('acara_design').select('role, storage_path').eq('acara_id', selectedAcaraId)
       ])
       if (committeeError || designError) {
-        setPanitiaIds(new Set())
+        setPanitiaJabatan(new Map())
+        setManualPanitia([])
         setPanitiaDesign(null)
         setParticipantDesign(null)
         setEventSettingsError('Pengaturan acara belum tersedia. Jalankan migration Supabase terlebih dahulu.')
         setEventSettingsLoading(false)
         return
       }
-      setPanitiaIds(new Set((committee || []).map((item) => item.generus_id)))
+      const nextPanitiaJabatan = new Map<string, string>()
+      const nextManualPanitia: ManualPanitia[] = []
+      for (const item of committee || []) {
+        if (item.generus_id && item.jabatan) {
+          nextPanitiaJabatan.set(item.generus_id, item.jabatan)
+        }
+        if (!item.generus_id && item.id && item.nama_manual && item.jabatan) {
+          nextPanitiaJabatan.set(item.id, item.jabatan)
+          nextManualPanitia.push({
+            id: item.id,
+            nama_manual: item.nama_manual,
+            jabatan: item.jabatan
+          })
+        }
+      }
+      setPanitiaJabatan(nextPanitiaJabatan)
+      setManualPanitia(nextManualPanitia)
       const nextDesigns: Record<DesignRole, string | null> = { participant: null, panitia: null }
       for (const design of designRows || []) {
         if (design.role === 'participant' || design.role === 'panitia') {
@@ -117,13 +143,32 @@ export default function QRCodePage() {
 
   const getDesignForGenerus = (generusId: string) => {
     if (!selectedAcaraId) return null
-    return panitiaIds.has(generusId) ? panitiaDesign : participantDesign
+    return panitiaJabatan.has(generusId) ? panitiaDesign : participantDesign
   }
 
-  const kelompokList = Array.from(new Set(generusList.map((g: Generus) => g.kelompok || 'Lainnya'))).sort()
+  const getCardDetails = (generus: Generus) => {
+    const jabatanPanitia = generus.jabatan || panitiaJabatan.get(generus.id)
+    if (jabatanPanitia) return jabatanPanitia.replace(/\s+#[0-9a-f]{8}$/i, '')
+    return `${generus.kelas ? `Kelas ${generus.kelas}` : '-'} ${generus.jenis_kelamin ? `• ${generus.jenis_kelamin}` : ''}`.trim()
+  }
 
-  const filteredGenerus = generusList.filter((g: Generus) => {
-    const matchPanitia = activeKelompok !== 'Panitia' || panitiaIds.has(g.id)
+  const isManualPanitia = (generusId: string) => manualPanitia.some((panitia) => panitia.id === generusId)
+
+  const qrGenerusList: Generus[] = [
+    ...generusList,
+    ...manualPanitia.map((panitia) => ({
+      id: panitia.id,
+      qr_code_id: panitia.id,
+      nama: panitia.nama_manual,
+      kelompok: 'Panitia Manual',
+      jabatan: panitia.jabatan
+    }))
+  ]
+
+  const kelompokList = Array.from(new Set(qrGenerusList.map((g: Generus) => g.kelompok || 'Lainnya'))).sort()
+
+  const filteredGenerus = qrGenerusList.filter((g: Generus) => {
+    const matchPanitia = activeKelompok !== 'Panitia' || panitiaJabatan.has(g.id)
     const matchKelompok = activeKelompok === 'Semua' || activeKelompok === 'Panitia' || (g.kelompok || 'Lainnya') === activeKelompok
     const matchSearch =
       g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -274,7 +319,7 @@ export default function QRCodePage() {
                 : 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
             }`}
           >
-            <Users className="w-4 h-4" /> Semua Kelompok ({generusList.length})
+            <Users className="w-4 h-4" /> Semua Kelompok ({qrGenerusList.length})
           </button>
 
           <button
@@ -285,11 +330,11 @@ export default function QRCodePage() {
                 : 'bg-slate-700 text-slate-100 hover:bg-slate-600 border border-slate-600'
             }`}
           >
-            <Users className="w-4 h-4 text-emerald-400" /> Panitia ({panitiaIds.size})
+            <Users className="w-4 h-4 text-emerald-400" /> Panitia ({panitiaJabatan.size})
           </button>
 
           {kelompokList.map((kel) => {
-            const count = generusList.filter((g: Generus) => (g.kelompok || 'Lainnya') === kel).length
+            const count = qrGenerusList.filter((g: Generus) => (g.kelompok || 'Lainnya') === kel).length
             return (
               <button
                 key={kel}
@@ -369,9 +414,11 @@ export default function QRCodePage() {
                       {getDesignForGenerus(g.id) ? (
                         <>
                           <div className="absolute left-[15%] top-[35.6%] z-20 h-[calc(55%+16px)] w-[70%] overflow-hidden rounded-[8%] bg-white p-2 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
-                            <p className="absolute left-[5%] top-[6%] w-[90%] truncate text-center text-[clamp(8px,2.4vw,14px)] font-extrabold uppercase leading-none text-blue-700">
-                              {g.kelompok || 'GENERUS'}
-                            </p>
+                            {!isManualPanitia(g.id) && (
+                              <p className="absolute left-[5%] top-[6%] w-[90%] truncate text-center text-[clamp(8px,2.4vw,14px)] font-extrabold uppercase leading-none text-blue-700">
+                                {g.kelompok || 'GENERUS'}
+                              </p>
+                            )}
                             <div className="absolute left-[18.5%] top-[19%] flex aspect-square w-[63%] items-center justify-center rounded-[5%] bg-white p-[3%] shadow-[0_1px_8px_rgba(0,0,0,0.1)]">
                               <QRCodeSVG
                                 value={g.qr_code_id || g.id}
@@ -386,7 +433,7 @@ export default function QRCodePage() {
                                 {g.nama}
                               </p>
                               <p className="truncate text-[clamp(6px,1.6vw,10px)] font-semibold leading-none text-gray-500">
-                                {g.kelas ? `Kelas ${g.kelas}` : '-'} {g.jenis_kelamin ? `• ${g.jenis_kelamin}` : ''}
+                                {getCardDetails(g)}
                               </p>
                             </div>
                           </div>
@@ -400,9 +447,11 @@ export default function QRCodePage() {
                         </>
                       ) : (
                         <>
-                          <span className="relative z-10 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-extrabold uppercase tracking-widest border border-blue-100">
-                            {g.kelompok || 'GENERUS'}
-                          </span>
+                          {!isManualPanitia(g.id) && (
+                            <span className="relative z-10 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-extrabold uppercase tracking-widest border border-blue-100">
+                              {g.kelompok || 'GENERUS'}
+                            </span>
+                          )}
 
                           <div className="relative z-10 p-2.5 bg-white border border-gray-100 rounded-xl shadow-inner">
                             <QRCodeSVG
@@ -418,7 +467,7 @@ export default function QRCodePage() {
                               {g.nama}
                             </h3>
                             <p className="text-xs font-semibold text-gray-500">
-                              {g.kelas ? `Kelas ${g.kelas}` : '-'} {g.jenis_kelamin ? `• ${g.jenis_kelamin}` : ''}
+                              {getCardDetails(g)}
                             </p>
                           </div>
                         </>
