@@ -225,18 +225,24 @@ export default function AdminScanPage() {
     }
 
     if (!gen) {
-      const manualPanitiaResult = await supabase
-        .from('acara_panitia')
-        .select('nama_manual')
-        .eq('id', candidates[0] || '')
-        .eq('acara_id', selectedAcara)
-        .is('generus_id', null)
-        .maybeSingle()
+      const manualPanitiaCandidates = candidates.filter((candidate) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate)
+      )
 
-      if (manualPanitiaResult.data?.nama_manual) {
-        showToast('Panitia Non Generus tidak perlu scan. Data ini tidak masuk rekap.', 'error')
-        setTimeout(() => { isProcessing.current = false }, 2500)
-        return
+      for (const candidate of manualPanitiaCandidates) {
+        const manualPanitiaResult = await supabase
+          .from('acara_panitia')
+          .select('nama_manual')
+          .eq('id', candidate)
+          .eq('acara_id', selectedAcara)
+          .is('generus_id', null)
+          .maybeSingle()
+
+        if (manualPanitiaResult.data?.nama_manual) {
+          showToast('Panitia Non Generus tidak perlu scan. Data ini tidak masuk rekap.', 'error')
+          setTimeout(() => { isProcessing.current = false }, 2500)
+          return
+        }
       }
     }
 
