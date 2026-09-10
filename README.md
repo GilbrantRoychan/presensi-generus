@@ -1,42 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Presensi Generus
 
-## Getting Started
+Aplikasi web presensi digital untuk komunitas Generus Tamantirto berbasis Next.js dan Supabase.
 
-First, run the development server:
+## Ringkasan
+
+Proyek ini mencakup:
+
+- Manajemen data generus
+- Manajemen acara dan panitia
+- Presensi QR Code
+- Rekapitulasi kehadiran
+- Pembuatan kartu QR / co-card dengan desain per acara
+
+## Dokumentasi Lengkap
+
+Dokumentasi detail proyek tersedia di [DOCUMENTASI_PROYEK.md](DOCUMENTASI_PROYEK.md).
+
+## Fitur Utama
+
+- Data generus: tambah, edit, hapus, import Excel/CSV, export Excel
+- Data acara: tambah, edit, hapus, pengaturan panitia dan desain acara
+- QR Code: generate kartu peserta/panitia, download PNG/JPG, eksport ZIP per kelompok
+- Presensi: scan QR, presensi manual, status hadir/izin/alpa
+- Rekap: lihat rekap publik dan export ke Excel
+
+## Setup Cepat
+
+### Prasyarat
+
+- Node.js 20+
+- npm
+- Supabase project
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### Langkah
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka:
 
-## Pengaturan Panitia dan Desain QR
+```text
+http://localhost:3000
+```
 
-Jalankan SQL migration `supabase/migrations/202609020001_acara_panitia_design.sql` di Supabase sebelum memakai pengaturan panitia dan desain per acara. Migration tersebut membuat relasi many-to-many `acara_panitia`, tabel `acara_design`, serta bucket Storage `acara-designs`.
+## SQL / Database
 
-Di halaman admin acara, edit acara yang sudah tersimpan untuk memilih panitia dari data `generus`, lalu upload desain peserta dan panitia. Generator QR pada `/qrcode` menggunakan desain sesuai acara dan status panitia; bila belum ada desain per acara, desain browser lama tetap menjadi fallback.
+File SQL utama yang tersedia:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `supabase/init_tables.sql`
+- `supabase/migrations/202609020001_acara_panitia_design.sql`
+- `supabase/migrations/202609020002_allow_public_qr_design_read.sql`
+- `supabase/migrations/202609030001_manual_panitia.sql`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Catatan
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Dokumentasi detail lebih lengkap ada di [DOCUMENTASI_PROYEK.md](DOCUMENTASI_PROYEK.md)
+- README ini berfungsi sebagai ringkasan cepat dan referensi singkat
